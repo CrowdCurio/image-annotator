@@ -1,0 +1,29 @@
+{
+  "name": "crowdcurio-image-annotator",
+  "version": "1.0.0",
+  "description": "an image annotation library for classification and transcription",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CrowdCurio/image-annotator.git"
+  },
+  "keywords": [
+    "crowdcurio",
+    "image",
+    "annotation"
+  ],
+  "author": "alex williams",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CrowdCurio/image-annotator/issues"
+  },
+  "homepage": "https://github.com/CrowdCurio/image-annotator#readme",
+  "dependencies": {
+    "jquery": "^1.11.1",
+    "jquery-ui": "^1.12.1",
+    "jquery-ui-browserify": "^1.11.0-pre-seelio"
+  }
+}
