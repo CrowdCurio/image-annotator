@@ -1,8 +1,11 @@
 # CrowdCurio Image Annotator Library
 The CrowdCurio Image Annotation Library implements counting (classification) and transcription tasks for images. 
 
+![An screenshot of the Image Annotator.](https://curio-media.s3.amazonaws.com/github-media/image-annotator.png)
+
 ## Features
 - Support for counting and (letter-by-letter) transcription tasks.
+- Support for alternating between practice tasks and required tasks.
 - Zoom functionality.
 - Fullscreen functionality.
 - Integrated support for CrowdCurio.
@@ -23,12 +26,38 @@ To build *with* minification, run:
 ## Usage
 The UI is controlled by a set of parameters upon instantiation. Here's an example of the configuration and its usage:
 ```
-// define config
+// transcription configuration
 var config = {
-    'mode': 'transcription',
-    'language': 'greek',
-    ...
+    mode: 'transcription',  # required
+    language: 'greek',      # required
+    practice: {
+        active: false
+    }
 }
+
+// counting configuration
+window.config = {
+            mode: 'counting',
+            labels: [{
+                name: 'Tau',
+                examples: [
+                    'url1',
+                    'url2',
+                    'url3'
+                ]
+            }, {
+                name: 'Nu',
+                examples: [
+                    'url1',
+                    'url2',
+                    'url3'
+                ]
+            }],
+            practice: {
+                active: true,
+                feedback: true
+            }
+        };
 
 // define a new annotator
 var annotator = new ImageAnnotator();
