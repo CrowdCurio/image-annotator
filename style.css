@@ -781,7 +781,7 @@ min-height: 70px;
   #submission_toggles.fullscreen {
       position: absolute;
       z-index: 9;
-      top: 210px;
+      top: 310px;
       right: 15px;
   }
 }
@@ -1049,7 +1049,7 @@ min-height: 70px;
 #practice_toggles.fullscreen {
   position: absolute;
   z-index: 9;
-  top: -10px;
+  top: 80px;
   right: 15px;
 }
 
@@ -1087,7 +1087,7 @@ min-height: 70px;
 }
 
 #bottom-controls.fullscreen {
-  bottom: -15px;
+  bottom: 0px;
   position: absolute;
   left: 0;
   border-top: 3px solid rgb(36, 36, 36);

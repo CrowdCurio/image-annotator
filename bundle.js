@@ -116,23 +116,28 @@ CrowdCurioClient.prototype.init = function(params){
 
     // create the task routing manager
     this.router = new TaskRoutingManager();
-    this.router.init(this.client, {
-        'page_size': 3,
-        'task': params['task']
-    });
 
-    // set relationship vars
+    // set (1) task and (2) experiment vars for routing
     this.task = {id: params['task'], type: 'Task'};
-    if('experiment' in params){
+    if(params['experiment']){
+        console.log('params: ');
+        console.log(params);
         this.experiment = {id: params['experiment'], type: 'Experiment'}
-    } else {
-        this.experiment = null
-    }
 
-    if('condition' in params){
-        this.condition = {id: params['condition'], type: 'Condition'}
+        this.router.init(this.client, {
+            'page_size': 3,
+            'task': params['task'],
+            'experiment': params['experiment']
+        });
+
     } else {
-        this.condition = null;
+        this.experiment = null;
+        
+        this.router.init(this.client, {
+            'page_size': 3,
+            'task': params['task']
+        });
+
     }
 }
 
@@ -335,7 +340,7 @@ ImageAnnotator.prototype.initialize = function (config) {
     /* render the elements before adding handlers */
     this.render(config);
 
-    this.client.init({task: window.task, user: window.user});
+    this.client.init({task: window.task, user: window.user, experiment: window.experiment});
 
     // define an image w/ load events
     global.oImg = new Image(); //$('.subject');
@@ -479,14 +484,20 @@ ImageAnnotator.prototype.initialize = function (config) {
 
                     if(Object.keys(task).length === 0 && task.constructor === Object){
                         that.client.update('taskmember', {
+                            id: window.task_member,
                             seen_all: true
                         }, function(result){
-                            console.log('After update:');
-                            console.log(result);
-                        });
+                            // close the modal
+                            that.modals['loading_modal'].modal('close'); 
         
-                        alert("Whoa! You finished all the tasks.")
-                    } else {
+                            // alert the user that they're out of tasks to see
+                            that.modals['finished_modal'].modal('open');
+        
+                            setTimeout(function(){
+                                window.location.href = "/";
+                            }, 5000);
+                        });
+                     } else {
                         /* update the source of the image and trigger the onload event */
                         that.client.setData(task['id']);
                         oImg.src = task['url'];
@@ -2417,7 +2428,7 @@ ImageAnnotator.prototype.show_items = function() {
 ImageAnnotator.prototype.toggleFullscreen = function(e){
     var main_interface = $("#main-interface");
     var main = $("#main");
-    var crowdcurio_nav_bar = $("#crowdcurio-nav-bar");
+    var crowdcurio_nav_bar = $("#crowdcurio-navigation-main");
     var detection_ui = $("#detection_task_interface");
     var view_dividers = $(".view-divider");
     var viewer = $("#viewer");
@@ -2734,6 +2745,7 @@ var ImageAnnotator = require('./image-annotator');
 global.DEV = false;
 global.task = window.task || -1;
 global.user = window.user || -1;
+global.experiment = window.experiment || -1;
 var config = window.config || {
         'mode': 'transcription',
     };
