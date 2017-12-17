@@ -23,9 +23,11 @@
   "homepage": "https://github.com/CrowdCurio/image-annotator#readme",
   "dependencies": {
     "hammerjs": "^2.0.8",
+    "intro.js": "^2.8.0-alpha.1",
     "jquery": "^1.11.1",
     "jquery-ui": "^1.12.1",
     "jquery-ui-browserify": "^1.11.0-pre-seelio",
-    "materialize-css": "^0.100.2"
+    "materialize-css": "^0.100.2",
+    "rangeslider.js": "^2.3.1"
   }
 }
