@@ -277,6 +277,9 @@
   padding: 16px 16px 0px;
   position: relative;
   height: 100%;
+}
+
+#primary_countingboard.fullscreen {
   width: -moz-fit-content;
 }
 
@@ -809,17 +812,17 @@ min-height: 70px;
 }
 
 @media only screen and (min-width:960px){
-  #submission_toggles.fullscreen {
+  #submission_toggles.fullscreen, #practice_validation_toggles.fullscreen {
       position: absolute;
       z-index: 9;
-      top: 310px;
+      top: 210px;
       right: 15px;
   }
 
   #practice_submission_toggles.fullscreen {
       position: absolute;
       z-index: 9;
-      top: 310px;
+      top: 395px;
       right: 15px;
   }
 }
@@ -1094,7 +1097,7 @@ min-height: 70px;
 #practice_toggles.fullscreen {
   position: absolute;
   z-index: 10;
-  top: 80px;
+  top: 0;
   right: 15px;
 }
 
@@ -1104,11 +1107,6 @@ min-height: 70px;
   background-color: #353b43;
   padding: 5px;
 }
-
-#practice_toggles_inner.fullscreen, #practice_submission_toggles_inner.fullscreen, #submission_toggles_inner.fullscreen {
-  margin-top: 225px;
-}
-
 
 #main.fullscreen {
   margin: 0;
@@ -1181,6 +1179,10 @@ min-height: 70px;
   pointer-events: auto !important;
   cursor: pointer;
   overflow: hidden;
+}
+
+#map.fullscreen {
+  right: 280px;
 }
 
 .location {

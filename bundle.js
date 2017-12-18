@@ -165,7 +165,7 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
     // extend params by adding relations
     if(model === 'response'){
         params = jQuery.extend({
-            user: that.user,
+            owner: that.user,
             data: that.data,
             task: that.task,
             experiment: that.experiment,
@@ -377,6 +377,8 @@ ImageAnnotator.prototype.initialize = function (config) {
     global.oImg = new Image(); //$('.subject');
     var Img = $(".subject");
     oImg.onload = function () {
+        Img.removeAttr('style');
+
         /*  compute the thumbnail size */
         var width = oImg.naturalWidth, height = oImg.naturalHeight, maxWidth = 180, maxHeight = 240;
 
@@ -396,16 +398,26 @@ ImageAnnotator.prototype.initialize = function (config) {
         /* show the map */
         $("#map").fadeIn();
 
+        // close the loading modal
+        that.modals['loading_modal'].modal('close'); 
+
         // close the modal
         that.modals['fetching_task_modal'].modal('close');
 
         // load based off of whether they've seen the tutorial or not
-        //var seenTutorial = localStorage.getItem('crowdcurio-tau-seen-tutorial');
-        //if(seenTutorial){
-            //that.modals['survey_efficacy_modal'].modal('open');
-        //} else {
+        var seenTutorial = localStorage.getItem('crowdcurio-tau-seen-tutorial');
+        if(seenTutorial){
+            // check for surveys
+            if('survey' in config){
+                if('efficacy' in config['survey']){
+                    if(config['survey']['efficacy'] == true){
+                        setTimeout(function(){that.modals['survey_efficacy_modal'].modal('open')}, 500);
+                    }
+                }
+            }
+        } else {
             setTimeout(function(){that.loadTutorial(); }, 500);
-        //}
+        }
     }
 
     /*  initialize the mini map */
@@ -533,9 +545,6 @@ ImageAnnotator.prototype.initialize = function (config) {
 
                 // switch the mode back
                 ms.changeMode(config['mode']);
-
-                // close the modal
-                that.modals['loading_modal'].modal('close'); 
             }
         });
     }
@@ -998,7 +1007,7 @@ ImageAnnotator.prototype.attachHandlers = function() {
 ImageAnnotator.prototype.render = function(config) {
     // define templates for each component
     var stateVariables = '<input id="m_colour" type="hidden" value="20"/><input id="m_size" type="hidden" value="20"/><input id="zoom" type="hidden" value="1.00"/><input id="zoom_step" type="hidden" value="0.25"/>';
-    var toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
+    var toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><!--<div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div>--><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
     var annotationSurfaceTemplate = '<div id="main-interface"> <div class="view-divider" style="height: 7px;"></div> <div id="viewer"> <div id="fragment_container"> <div id="markers" class="s20 " style="position:absolute;"> <style>.marker {position: absolute;height: 20px;width: 20px;box-shadow: rgba(0,0,0,.496094) 0 2px 4px;-webkit-border-radius: 15px;border-radius: 15px;}.marker .character {font-size: 12px;line-height: 20px;font-weight: 600;}</style> </div> <div id="fragment"><img class="subject" src=""></div> </div> <div id="map" style="display: none; float: right;"> <div class="map_container"> <img id="thumb" /> <div class="location" style="border: 1px solid black;"></div> </div> </div> </div> <div class="view-divider"></div> <div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;height: 100%;"> {LABEL_SPACE} </div> </div> <div class="view-divider"></div> </div>';
     var practiceWindowTemplate = '<div id="practice_toggles" class="practice side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_toggles_inner"> <div class="toggle-text"> Practice Room <a class="modal-trigger" href="#practice_information_modal" style="color: white;"><i class="fa fa-question-circle" aria-hidden="true"></i></a> <hr/> </div> <div class="practice-task-text"> <div>You have</div> <div class="practice-tasks-number-remaining"><div class="preloader-wrapper active"><div class="spinner-layer" style="border-color: orange"><div class="circle-clipper left"><div class="circle"></div></div><div class="gap-patch"><div class="circle"></div></div><div class="circle-clipper right"><div class="circle"></div></div></div></div></div> <div>available practice tasks.</div> <hr/> </div> <div> <button id="practice-room-btn" class="waves-light btn">Start Practicing</button> </div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     var validatePracticeWindowTemplate = '<div id="practice_validation_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_validation_toggles_inner"> <div class="toggle-text"> Check Your Answers <hr/> </div> <div id="validation-examples-container"><div><span id="validation-example-green">Green Circle</span> = Correct Tau</div><div><span id="validation-example-yellow">Yellow Circle</span> = Missed Tau</div><div><span id="validation-example-red">Red Circle</span> = Incorrect (Not Tau)</div></div> <button id="validate-practice-button" class="waves-light btn submit"> <i class="fa fa-check-circle-o" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
@@ -1149,9 +1158,9 @@ ImageAnnotator.prototype.loadTutorial = function(){
             intro: "<b>Welcome!</b><p>Before you start transcribing, let us help you familiarize yourself with the interface.</p><p>Click \"Next\" to begin.</p>" 
             },
             {
-            element: '#viewer',
-            intro: "This <b><i>Annotation Window</i></b> allows you click on the image to make annotations. In order to make annotations, you must have a valid label selected in the Counting Window below"
-            },
+                element: '#main-interface',
+                intro: "<b>Welcome!</b><p>Before you start transcribing, let us help you familiarize yourself with the interface.</p><p>Click \"Next\" to begin.</p>" 
+            },    
             {
             element: '#bottom-control-keypad',
             intro: "The <b><i>Counting Window</i></b> lets you select a particular label (i.e. Tau). Go ahead and click on a label now."
@@ -1165,22 +1174,25 @@ ImageAnnotator.prototype.loadTutorial = function(){
             intro: "The <b><i>Map</i></b> shows the entire image. The shaded region shows what portion of the image is visible. You can <b>drag</b> the shaded region to change your view of the image. <p>Try moving the shaded region around!</p>"
             },
             {
+                element: '#toggles',
+                intro: "The <b>View</b> toggle allows you to <b>fullscreen</b> the interface and hide the minimap."
+            },
+            {
             element: '#submission_toggles',
             intro: "After you've counted the objects, you can click the Arrow button, which will give you the next image.<p><b>Click \"Done\"</i> to begin counting this image!</b></p>"
             }
         ] 
     });
 
-    intro.onchange(function(targetElement){
-        switch(targetElement.id){
-            case "submission_toggles":
-                window.localStorage.setItem("crowdcurio-tau-seen-tutorial", "True");
-                break;
-        }
+    // add a handler for completing the tutorial
+    var that = this;
+    intro.oncomplete(function(){
+        window.localStorage.setItem("crowdcurio-tau-seen-tutorial", "True");
+        setTimeout(function(){that.modals['survey_efficacy_modal'].modal('open')}, 500);
     });
 
+    // start the tutorial
     intro.start();
-
 }
 
 /**
@@ -1290,13 +1302,14 @@ ImageAnnotator.prototype.resetSurface = function(){
     surface.markers = {};
 
     /* reset the label counters */
-    $('.task-option-toggle.success').removeClass('success');
+    //$('.task-option-toggle.success').removeClass('success');
     $('.task-option-count').text("?");
 
     /* reset the examples */
     $('.detection-wrapright').html('<div id="detection_output_interface"></div>');
 
     /* set the surface mode to something arbitrary */
+    $("#zoom").val('1.00');
     surface.mode = "issues";
     surface.selection = null;
 };
@@ -2063,7 +2076,11 @@ ImageAnnotator.prototype.scale_items =  function(currentFactor, factor) {
 
             $(marker).css("left", sx + "px");
             $(marker).css("top", sy + "px");
-
+            
+            // 
+            //var id = $(marker).attr('id').split('-')[1];
+            //ms.markers[id]['x'] = sx+10;
+            //ms.markers[id]['y'] = sy+10;
         });
 
         // Scale circles
@@ -2746,6 +2763,7 @@ ImageAnnotator.prototype.show_items = function() {
 ImageAnnotator.prototype.toggleFullscreen = function(e){
     var main_interface = $("#main-interface");
     var main = $("#main");
+    var map = $("#map");
     var crowdcurio_nav_bar = $("#crowdcurio-navigation-main");
     var detection_ui = $("#detection_task_interface");
     var view_dividers = $(".view-divider");
@@ -2757,14 +2775,17 @@ ImageAnnotator.prototype.toggleFullscreen = function(e){
     var zoom_view_toggles = $("#zoom_view_toggles");
     var practice_toggles = $("#practice_toggles");
     var practice_submission_toggles = $("#practice_submission_toggles");
+    var practice_validation_toggles = $("#practice_validation_toggles");
     var submission_toggles = $("#submission_toggles");
     var practice_toggles_inner = $("#practice_toggles_inner");
     var practice_submission_toggles_inner = $("#practice_submission_toggles_inner");
     var submission_toggles_inner = $("#submission_toggles_inner");
+    var primary_countingboard = $("#primary_countingboard");
 
     if(main_interface.hasClass('fullscreen')){
         main_interface.removeClass('fullscreen');
         main.removeClass('fullscreen');
+        map.removeClass('fullscreen');
         detection_ui.removeClass('fullscreen');
         view_dividers.removeClass('fullscreen');
         viewer.removeClass('fullscreen');
@@ -2779,10 +2800,13 @@ ImageAnnotator.prototype.toggleFullscreen = function(e){
         submission_toggles_inner.removeClass('fullscreen');
         practice_submission_toggles_inner.removeClass('fullscreen');
         practice_submission_toggles.removeClass('fullscreen');
+        practice_validation_toggles.removeClass('fullscreen');
+        primary_countingboard.removeClass('fullscreen');
         crowdcurio_nav_bar.show();
     } else {
         main_interface.addClass('fullscreen');
         main.addClass('fullscreen');
+        map.addClass('fullscreen');
         detection_ui.addClass('fullscreen');
         view_dividers.addClass('fullscreen');
         viewer.addClass('fullscreen');
@@ -2797,6 +2821,8 @@ ImageAnnotator.prototype.toggleFullscreen = function(e){
         submission_toggles_inner.addClass('fullscreen');
         practice_submission_toggles_inner.addClass('fullscreen');
         practice_submission_toggles.addClass('fullscreen');
+        practice_validation_toggles.addClass('fullscreen');
+        primary_countingboard.addClass('fullscreen');
         crowdcurio_nav_bar.hide();
     }
 
@@ -2822,6 +2848,7 @@ ImageAnnotator.prototype.togglePractice = function(e){
     var practice_submission_window = $("#practice_submission_toggles");
     var submission_window = $("#submission_toggles"); 
     var Img = $(".subject");
+    var oImg = new Image();
     var that = this;
     var state;
 
@@ -2829,6 +2856,9 @@ ImageAnnotator.prototype.togglePractice = function(e){
     if($(btn).hasClass('disabled')){
         return;
     }
+
+    $("#zoom").val('1.00');
+    Img.removeAttr('style');
 
     // set-up a handler for loading a new image
     oImg.onload = function () {

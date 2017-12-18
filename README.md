@@ -3,6 +3,8 @@ The CrowdCurio Image Annotation Library implements counting (classification) and
 
 ![An screenshot of the Image Annotator.](https://curio-media.s3.amazonaws.com/github-media/image-annotator.png)
 
+<center>"<b><i>The interface is so mature.</i></b>" - Hemant Surale.</center>
+
 ## Features
 - Support for counting and (letter-by-letter) transcription tasks.
 - Support for alternating between practice tasks and required tasks.
