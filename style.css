@@ -281,6 +281,7 @@
 
 #primary_countingboard.fullscreen {
   width: -moz-fit-content;
+  min-width: 850px;
 }
 
 /* Standard Rows */
