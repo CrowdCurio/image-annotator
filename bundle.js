@@ -1032,11 +1032,19 @@ ImageAnnotator.prototype.render = function(config) {
             annotationSurfaceTemplate = annotationSurfaceTemplate.replace('{LABEL_SPACE}', 'ERROR: No language specified.');
         }
     } else if(config['mode'] == 'counting'){
+
+        var estimate_display = 'none'
+        if('estimate' in config){
+            if(config['estimate'] === true){
+                estimate_display = 'block'
+            }
+        }
+
         // build the counting UI based on the config
         // 1. build the label container
         var labels = '<div id="task-options-header" class="center white-text">Classify the following:</div><hr/><div class="joint-toggle">';
         for(var i = 0; i < config['labels'].length; i++){
-            labels += '<label id="'+config['labels'][i]['name'].toLowerCase()+'-btn" class="task-option-toggle toggle-btn" lval="marker-n'+(i+1)+'"><input type="radio" name="'+(i+1)+'" value="'+config['labels'][i]['name']+'"/>'+config['labels'][i]['name']+'<div id="'+config['labels'][i]['name'].toLowerCase()+'-count" class="task-option-count" marker="n'+(i+1)+'" >?</div></label><i id="'+config['labels'][i]['name'].toLowerCase()+'-estimate" class="white-text estimate-button fa fa-pencil-square-o fa-1" style="color:black;float: right;padding-top: 12px;cursor: pointer;"></i>';
+            labels += '<label id="'+config['labels'][i]['name'].toLowerCase()+'-btn" class="task-option-toggle toggle-btn" lval="marker-n'+(i+1)+'"><input type="radio" name="'+(i+1)+'" value="'+config['labels'][i]['name']+'"/>'+config['labels'][i]['name']+'<div id="'+config['labels'][i]['name'].toLowerCase()+'-count" class="task-option-count" marker="n'+(i+1)+'" >?</div></label><i id="'+config['labels'][i]['name'].toLowerCase()+'-estimate" class="white-text estimate-button fa fa-pencil-square-o fa-1" style="display: '+estimate_display+';color:black;float: right;padding-top: 12px;cursor: pointer;"></i>';
 
         }
         labels += '</div>';
