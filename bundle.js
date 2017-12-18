@@ -1171,7 +1171,11 @@ ImageAnnotator.prototype.loadTutorial = function(){
             },    
             {
             element: '#bottom-control-keypad',
-            intro: "The <b><i>Counting Window</i></b> lets you select a particular label (i.e. Tau). Go ahead and click on a label now."
+            intro: "The <b><i>Counting Window</i></b> lets you select a particular label (i.e. Tau)."
+            },
+            {
+            element: '#tau-btn',
+            intro: "Click here to begin counting Taus."
             },
             {
             element: '#primary_countingboard',
