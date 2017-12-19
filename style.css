@@ -829,22 +829,6 @@ min-height: 70px;
   }
 }
 
-@media only screen and (max-width:1110px){
-  #submission_toggles.fullscreen {
-      position: absolute;
-      z-index: 9;
-      top: 110px;
-      left: 15px;
-  }
-
-  #practice_submission_toggles.fullscreen {
-      position: absolute;
-      z-index: 10;
-      top: 110px;
-      left: 15px;
-  }
-}
-
 #main.fullscreen {
   margin: 0;
   padding-top: 0;
