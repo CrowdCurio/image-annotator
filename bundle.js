@@ -1007,7 +1007,7 @@ ImageAnnotator.prototype.attachHandlers = function() {
 ImageAnnotator.prototype.render = function(config) {
     // define templates for each component
     var stateVariables = '<input id="m_colour" type="hidden" value="20"/><input id="m_size" type="hidden" value="20"/><input id="zoom" type="hidden" value="1.00"/><input id="zoom_step" type="hidden" value="0.25"/>';
-    var toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><!--<div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div>--><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
+    var toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
     var annotationSurfaceTemplate = '<div id="main-interface"> <div class="view-divider" style="height: 7px;"></div> <div id="viewer"> <div id="fragment_container"> <div id="markers" class="s20 " style="position:absolute;"> <style>.marker {position: absolute;height: 20px;width: 20px;box-shadow: rgba(0,0,0,.496094) 0 2px 4px;-webkit-border-radius: 15px;border-radius: 15px;}.marker .character {font-size: 12px;line-height: 20px;font-weight: 600;}</style> </div> <div id="fragment"><img class="subject" src=""></div> </div> <div id="map" style="display: none; float: right;"> <div class="map_container"> <img id="thumb" /> <div class="location" style="border: 1px solid black;"></div> </div> </div> </div> <div class="view-divider"></div> <div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;height: 100%;"> {LABEL_SPACE} </div> </div> <div class="view-divider"></div> </div>';
     var practiceWindowTemplate = '<div id="practice_toggles" class="practice side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_toggles_inner"> <div class="toggle-text"> Practice Room <a class="modal-trigger" href="#practice_information_modal" style="color: white;"><i class="fa fa-question-circle" aria-hidden="true"></i></a> <hr/> </div> <div class="practice-task-text"> <div>You have</div> <div class="practice-tasks-number-remaining"><div class="preloader-wrapper active"><div class="spinner-layer" style="border-color: orange"><div class="circle-clipper left"><div class="circle"></div></div><div class="gap-patch"><div class="circle"></div></div><div class="circle-clipper right"><div class="circle"></div></div></div></div></div> <div>available practice tasks.</div> <hr/> </div> <div> <button id="practice-room-btn" class="waves-light btn">Start Practicing</button> </div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     var validatePracticeWindowTemplate = '<div id="practice_validation_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_validation_toggles_inner"> <div class="toggle-text"> Check Your Answers <hr/> </div> <div id="validation-examples-container"><div><span id="validation-example-green">Green Circle</span> = Correct Tau</div><div><span id="validation-example-yellow">Yellow Circle</span> = Missed Tau</div><div><span id="validation-example-red">Red Circle</span> = Incorrect (Not Tau)</div></div> <button id="validate-practice-button" class="waves-light btn submit"> <i class="fa fa-check-circle-o" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
@@ -1544,10 +1544,11 @@ ImageAnnotator.prototype.addTool = function(event) {
 
             /*  create a visual marker object */
             surface.selection = "TMP" + (new Date().getTime());
-            var zoom = $("#zoom").val();
+            var zoom = parseFloat($("#zoom").val());
             var marker_size = parseInt($('#m_size').val(), 10) * zoom;
             var x = (event.pageX - $('#fragment').offset().left);
             var y = (event.pageY - $('#fragment').offset().top);
+            console.log(event);
 
             /*  find the center of click */
             var mx = x - (marker_size / 2);
@@ -1847,7 +1848,20 @@ ImageAnnotator.prototype.hoverToolOn = function(e){
     var ele = $(e.target);
     ele.addClass('hovering');
     var marker = this.markers[e.target.id.split('-')[1]];
-    ele.animate({'top': (parseInt(marker.y)-30)+'px', 'left': (parseInt(marker.x)-30)+'px', 'height': '60px', 'width': '60px', 'border-radius': '100px'}, 50);
+    var zoom = parseFloat($("#zoom").val());
+    var scaler;
+    if(zoom === 0.75){
+        scaler = 1.25;
+    } else if(zoom === 0.5){
+        scaler = 1.5;
+    } else if(zoom === 1.25){
+        scaler = 0.75;
+    } else if(zoom === 1.5){
+        scaler = 0.5;
+    } else{
+        scaler = 1.0;
+    }
+    ele.animate({'top': (zoom*(parseInt(marker.y)-(30*scaler)))+'px', 'left': (zoom*(parseInt(marker.x)-(30*scaler)))+'px', 'height': '60px', 'width': '60px', 'border-radius': '100px'}, 50);
 
     /*  forcefully turn on draggability of the fragment image */
     $("#fragment_container").draggable("option", "disabled", true);
@@ -1864,7 +1878,21 @@ ImageAnnotator.prototype.hoverToolOff = function(e){
     var ele = $(e.target);
     ele.removeClass('hovering');
     var marker = this.markers[e.target.id.split('-')[1]];
-    ele.animate({'top': (parseInt(marker.y)-10)+'px', 'left': (parseInt(marker.x)-10)+'px', 'height': '20px', 'width': '20px'}, 50);
+    var markerSize = parseInt($("#m_size").val(), 10);
+    var zoom = parseFloat($("#zoom").val());
+    var scaler;
+    if(zoom === 0.75){
+        scaler = 1.25;
+    } else if(zoom === 0.5){
+        scaler = 1.5;
+    } else if(zoom === 1.25){
+        scaler = 0.75;
+    } else if(zoom === 1.5){
+        scaler = 0.5;
+    } else{
+        scaler = 1.0;
+    }
+    ele.animate({'top': (zoom*(parseInt(marker.y)-(10*scaler)))+'px', 'left': (zoom*(parseInt(marker.x)-(10*scaler)))+'px', 'height': '20px', 'width': '20px'}, 50);
 
     /*  forcefully turn off draggability of the fragment image */
     $("#fragment_container").draggable("option", "disabled", false);
