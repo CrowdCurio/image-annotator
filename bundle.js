@@ -562,6 +562,9 @@ ImageAnnotator.prototype.initialize = function (config) {
         // 2. hide the map
         $("#map").fadeOut()
 
+        // 2.5. calculate accuracy
+        that.calculateAccuracy(that.data['name'].split('-')[0]);
+
         // 3. save the new response
         if(!global.DEV){
             that.client.create('response', {
@@ -599,7 +602,7 @@ ImageAnnotator.prototype.initialize = function (config) {
                             that.modals['loading_modal'].modal('close'); 
                             
                             // alert the user that they're out of tasks to see
-                            that.modals['finished_modal'].modal('open');
+                            that.modals['experiment_complete_modal'].modal('open');
         
                             setTimeout(function(){
                                 // otherwise, increment the user's experiment workflow
@@ -1012,7 +1015,7 @@ ImageAnnotator.prototype.render = function(config) {
     var practiceWindowTemplate = '<div id="practice_toggles" class="practice side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_toggles_inner"> <div class="toggle-text"> Practice Room <a class="modal-trigger" href="#practice_information_modal" style="color: white;"><i class="fa fa-question-circle" aria-hidden="true"></i></a> <hr/> </div> <div class="practice-task-text"> <div>You have</div> <div class="practice-tasks-number-remaining"><div class="preloader-wrapper active"><div class="spinner-layer" style="border-color: orange"><div class="circle-clipper left"><div class="circle"></div></div><div class="gap-patch"><div class="circle"></div></div><div class="circle-clipper right"><div class="circle"></div></div></div></div></div> <div>available practice tasks.</div> <hr/> </div> <div> <button id="practice-room-btn" class="waves-light btn">Start Practicing</button> </div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     var validatePracticeWindowTemplate = '<div id="practice_validation_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_validation_toggles_inner"> <div class="toggle-text"> Check Your Answers <hr/> </div> <div id="validation-examples-container"><div><span id="validation-example-green">Green Circle</span> = Correct Tau</div><div><span id="validation-example-yellow">Yellow Circle</span> = Missed Tau</div><div><span id="validation-example-red">Red Circle</span> = Incorrect (Not Tau)</div></div> <button id="validate-practice-button" class="waves-light btn submit"> <i class="fa fa-check-circle-o" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     var nextPracticeWindowTemplate = '<div id="practice_submission_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_submission_toggles_inner"> <div class="toggle-text"> Next Practice Task <hr/> </div> <button id="next-practice-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
-    var modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly count the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div>';
+    var modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly count the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div>';
     var keypad_template_greek = ' <div id="keypad" style="margin: 0 auto;"> <div id="fullscreen_button"></div> <div id="primary_keyboard" class="main"> <div id="variations"> <div class="example_label">Hover Over Characters<br/>Below for Examples</div> <div class="key_label"></div> <div class="details"> <div class="examples"> <div class="ex_1"></div> <div class="ex_2"></div> </div> </div> </div> <div id="keypad-letter-container" style="width: 535px;float:left;margin-bottom: 15px;"> <div class="upper_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Characters</h4> <p></p> </div> <div id="ku_32" class=" key waves-light btn key-letter"><span class="u">&#x0020;</span><span class="l">&nbsp;</span><span class="label"></span></div> <div id="ku_87" class=" key waves-light btn key-letter"><span class="u">&#x03A3;</span><span class="l"></span><span class="label">Sigma</span></div> <div id="ku_69" class=" key waves-light btn key-letter"><span class="u">&#x0395;</span><span class="l">&#x03B5;</span><span class="label">Epsilon</span></div> <div id="ku_82" class=" key waves-light btn key-letter"><span class="u">&#x03A1;</span><span class="l">&#x03C1;</span><span class="label">Rho</span></div> <div id="ku_84" class=" key waves-light btn key-letter"><span class="u">&#x03A4;</span><span class="l">&#x03C4;</span><span class="label">Tau</span></div> <div id="ku_89" class=" key waves-light btn key-letter"><span class="u">&#x03A5;</span><span class="l">&#x03C5;</span><span class="label">Upsilon</span></div> <div id="ku_85" class=" key waves-light btn key-letter"><span class="u">&#x0398;</span><span class="l">&#x03B8;</span><span class="label">Theta</span></div> <div id="ku_73" class=" key waves-light btn key-letter"><span class="u">&#x0399;</span><span class="l">&#x03B9;</span><span class="label">Iota</span></div> <div id="ku_79" class=" key waves-light btn key-letter"><span class="u">&#x039F;</span><span class="l">&#x03BF;</span><span class="label">Omicron</span></div> <div id="ku_80" class=" key waves-light btn key-letter"><span class="u">&#x03A0;</span><span class="l">&#x03C0;</span><span class="label">Pi</span></div> </div> <div class="middle_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div id="ku_65" class=" key waves-light btn key-letter"><span class="u">&#x0391;</span><span class="l">&#x03B1;</span><span class="label">Alpha</span></div> <div id="ku_83" class=" key waves-light btn key-letter"><span class="u">&#x03F9;</span><span class="l">&#x03F2;</span><span class="label">Sigma</span></div> <div id="ku_68" class=" key waves-light btn key-letter"><span class="u">&#x0394;</span><span class="l">&#x03B4;</span><span class="label">Delta</span></div> <div id="ku_70" class=" key waves-light btn key-letter"><span class="u">&#x03A6;</span><span class="l">&#x03C6;</span><span class="label">Phi</span></div> <div id="ku_71" class=" key waves-light btn key-letter"><span class="u">&#x0393;</span><span class="l">&#x03B3;</span><span class="label">Gamma</span></div> <div id="ku_72" class=" key waves-light btn key-letter"><span class="u">&#x0397;</span><span class="l">&#x03B7;</span><span class="label">Eta</span></div> <div id="ku_74" class=" key waves-light btn key-letter"><span class="u">&#x039E;</span><span class="l">&#x03BE;</span><span class="label">Xi</span></div> <div id="ku_75" class=" key waves-light btn key-letter"><span class="u">&#x039A;</span><span class="l">&#x03BA;</span><span class="label">Kappa</span></div> <div id="ku_76" class=" key waves-light btn key-letter"><span class="u">&#x039B;</span><span class="l">&#x03BB;</span><span class="label">Lambda</span></div> </div> <div class="lower_row standard" style="display: inline-block;width:100%;margin-left: 65px;"> <div id="ku_90" class=" key waves-light btn key-letter"><span class="u">&#x0396;</span><span class="l">&#x03B6;</span><span class="label">Zeta</span></div> <div id="ku_88" class=" key waves-light btn key-letter"><span class="u">&#x03A7;</span><span class="l">&#x03C7;</span><span class="label">Khi</span></div> <div id="ku_67" class=" key waves-light btn key-letter"><span class="u">&#x03A8;</span><span class="l">&#x03C8;</span><span class="label">Psi</span></div> <div id="ku_86" class=" key waves-light btn key-letter"><span class="u">&#x03a9;</span><span class="l">&#x03C9;</span><span class="label">Omega</span></div> <div id="ku_66" class=" key waves-light btn key-letter"><span class="u">&#x0392;</span><span class="l">&#x03B2;</span><span class="label">Beta</span></div> <div id="ku_78" class=" key waves-light btn key-letter"><span class="u">&#x039D;</span><span class="l">&#x03BD;</span><span class="label">Nu</span></div> <div id="ku_77" class=" key waves-light btn key-letter"><span class="u">&#x039C;</span><span class="l">&#x03BC;</span><span class="label">Mu</span></div> </div> <div class="push"></div> </div> <div id="keypad-symbols-container" style="width: 200px;float:left;margin-left:27px;"> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Symbols</h4> <p></p> </div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE646;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE662;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE674;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE6A3;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE68F;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE66A;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x0370;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE616;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE629;</span><</div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x03DB;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE648;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE696;</span></div> </div> </div> </div> </div>';
     var nextWindowTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr/> </div> <button id="next-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     var keypad_template_greek = ' <div id="keypad" style="margin: 0 auto;"> <div id="fullscreen_button"></div> <div id="primary_keyboard" class="main"> <div id="variations"> <div class="example_label">Hover Over Characters<br/>Below for Examples</div> <div class="key_label"></div> <div class="details"> <div class="examples"> <div class="ex_1"></div> <div class="ex_2"></div> </div> </div> </div> <div id="keypad-letter-container" style="width: 535px;float:left;margin-bottom: 15px;"> <div class="upper_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Characters</h4> <p></p> </div> <div id="ku_32" class=" key waves-light btn key-letter"><span class="u">&#x0020;</span><span class="l">&nbsp;</span><span class="label"></span></div> <div id="ku_87" class=" key waves-light btn key-letter"><span class="u">&#x03A3;</span><span class="l"></span><span class="label">Sigma</span></div> <div id="ku_69" class=" key waves-light btn key-letter"><span class="u">&#x0395;</span><span class="l">&#x03B5;</span><span class="label">Epsilon</span></div> <div id="ku_82" class=" key waves-light btn key-letter"><span class="u">&#x03A1;</span><span class="l">&#x03C1;</span><span class="label">Rho</span></div> <div id="ku_84" class=" key waves-light btn key-letter"><span class="u">&#x03A4;</span><span class="l">&#x03C4;</span><span class="label">Tau</span></div> <div id="ku_89" class=" key waves-light btn key-letter"><span class="u">&#x03A5;</span><span class="l">&#x03C5;</span><span class="label">Upsilon</span></div> <div id="ku_85" class=" key waves-light btn key-letter"><span class="u">&#x0398;</span><span class="l">&#x03B8;</span><span class="label">Theta</span></div> <div id="ku_73" class=" key waves-light btn key-letter"><span class="u">&#x0399;</span><span class="l">&#x03B9;</span><span class="label">Iota</span></div> <div id="ku_79" class=" key waves-light btn key-letter"><span class="u">&#x039F;</span><span class="l">&#x03BF;</span><span class="label">Omicron</span></div> <div id="ku_80" class=" key waves-light btn key-letter"><span class="u">&#x03A0;</span><span class="l">&#x03C0;</span><span class="label">Pi</span></div> </div> <div class="middle_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div id="ku_65" class=" key waves-light btn key-letter"><span class="u">&#x0391;</span><span class="l">&#x03B1;</span><span class="label">Alpha</span></div> <div id="ku_83" class=" key waves-light btn key-letter"><span class="u">&#x03F9;</span><span class="l">&#x03F2;</span><span class="label">Sigma</span></div> <div id="ku_68" class=" key waves-light btn key-letter"><span class="u">&#x0394;</span><span class="l">&#x03B4;</span><span class="label">Delta</span></div> <div id="ku_70" class=" key waves-light btn key-letter"><span class="u">&#x03A6;</span><span class="l">&#x03C6;</span><span class="label">Phi</span></div> <div id="ku_71" class=" key waves-light btn key-letter"><span class="u">&#x0393;</span><span class="l">&#x03B3;</span><span class="label">Gamma</span></div> <div id="ku_72" class=" key waves-light btn key-letter"><span class="u">&#x0397;</span><span class="l">&#x03B7;</span><span class="label">Eta</span></div> <div id="ku_74" class=" key waves-light btn key-letter"><span class="u">&#x039E;</span><span class="l">&#x03BE;</span><span class="label">Xi</span></div> <div id="ku_75" class=" key waves-light btn key-letter"><span class="u">&#x039A;</span><span class="l">&#x03BA;</span><span class="label">Kappa</span></div> <div id="ku_76" class=" key waves-light btn key-letter"><span class="u">&#x039B;</span><span class="l">&#x03BB;</span><span class="label">Lambda</span></div> </div> <div class="lower_row standard" style="display: inline-block;width:100%;margin-left: 65px;"> <div id="ku_90" class=" key waves-light btn key-letter"><span class="u">&#x0396;</span><span class="l">&#x03B6;</span><span class="label">Zeta</span></div> <div id="ku_88" class=" key waves-light btn key-letter"><span class="u">&#x03A7;</span><span class="l">&#x03C7;</span><span class="label">Khi</span></div> <div id="ku_67" class=" key waves-light btn key-letter"><span class="u">&#x03A8;</span><span class="l">&#x03C8;</span><span class="label">Psi</span></div> <div id="ku_86" class=" key waves-light btn key-letter"><span class="u">&#x03a9;</span><span class="l">&#x03C9;</span><span class="label">Omega</span></div> <div id="ku_66" class=" key waves-light btn key-letter"><span class="u">&#x0392;</span><span class="l">&#x03B2;</span><span class="label">Beta</span></div> <div id="ku_78" class=" key waves-light btn key-letter"><span class="u">&#x039D;</span><span class="l">&#x03BD;</span><span class="label">Nu</span></div> <div id="ku_77" class=" key waves-light btn key-letter"><span class="u">&#x039C;</span><span class="l">&#x03BC;</span><span class="label">Mu</span></div> </div> <div class="push"></div> </div> <div id="keypad-symbols-container" style="width: 200px;float:left;margin-left:27px;"> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Symbols</h4> <p></p> </div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE646;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE662;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE674;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE6A3;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE68F;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE66A;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x0370;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE616;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE629;</span><</div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x03DB;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE648;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE696;</span></div> </div> </div> </div> </div>';
@@ -1087,7 +1090,7 @@ ImageAnnotator.prototype.render = function(config) {
     parent_container.append(modalsTemplate);
 
     // attach materialize modal loaders
-    var modals = ['loading_modal', 'fetching_task_modal', 'finished_modal', 'practice_finished_modal', 'practice_information_modal', 'survey_efficacy_modal'];
+    var modals = ['loading_modal', 'fetching_task_modal', 'finished_modal', 'practice_finished_modal', 'practice_information_modal', 'survey_efficacy_modal', 'experiment_complete_modal'];
     for(var i=0; i<modals.length; i++){
         this.modals[modals[i]] = $("#"+modals[i]);
         this.modals[modals[i]].modal({dismissible: false});
@@ -3192,13 +3195,123 @@ ImageAnnotator.prototype.loadKnownMarkers = function(name){
     // save a new event model
     this.client.create('event', {
         content: {
-            'type': 'practice-validation',
+            'type': 'practice-performance',
             'fp': false_positive_annotations,
             'tp': true_positive_annotations,
             'fn': false_negative_annotations
         }
     }, function(){
-        print("Pracitice Validation Event: Saved!")
+        print("Pracitice Performance Event: Saved!")
+    });
+}
+
+
+ImageAnnotator.prototype.calculateAccuracy = function(name){
+    /**
+       * Helper function for calculating Euclidean distance.
+       * @param point
+       * @param target
+       * @returns {Number}
+    */
+    function d(point, target) {
+        return parseInt(Math.sqrt(Math.pow(Math.abs(point.x-target.x), 2) + Math.pow(Math.abs(point.y-target.y), 2)));
+  }
+    
+    // get the data from the known annotations object
+    var that = this;
+    var markers = this.known_annotations[name];
+    var marker_nums = {};
+    var marker_sums = {};
+    var local_markers = JSON.parse(JSON.stringify(ms.markers));
+    var known_annotations = Object.keys(markers).length;
+    var false_negative_annotations = 0;
+    var false_positive_annotations = 0;
+    var true_positive_annotations = 0;
+
+    // verify we have a valid marker set.
+    if(!markers){
+        print("Known annotations don't exist for \""+name+"\"");
+        return;
+    }
+
+    // iterate over each marker
+    for (var key in markers) {
+        if (markers.hasOwnProperty(key)) {
+           var marker = markers[key];
+
+            /*  append the draggable element into html */
+            var newMarker;
+            if(that.mode === 'transcription'){
+                if(marker.label === ""){
+                    newMarker = "<div class='marker new unfinished' id='m-" + key + "' style='left: " + (marker.x-10) + "px;top:" + (marker.y-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker.label+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+                } else {
+                    newMarker = "<div class='marker new' id='m-" + key + "' style='left: " + (marker.x-10) + "px;top:" + (marker.y-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker.label+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+                }
+            } else if(that.mode === 'counting') {
+                // 1. get the marker's class
+                var marker_num;
+                if(!(marker_num in marker_nums)){
+                    marker_num = $("#"+marker.label+"-btn").attr('lval');
+                    marker_nums[marker.label] = marker_num;
+                } else {    // no need to reparse the dom
+                    marker_num = marker_num[marker.label];
+                }
+
+                if(!(marker.label in marker_sums)){
+                    marker_sums[marker.label] = 0
+                }
+
+                marker_sums[marker.label] += 1
+
+                // 2. create the marker tempalte
+
+                // 2.1. try to find the user's closet annotation
+                var target = {x: marker.x, y: marker.y};
+                var cur_min = null;
+                var cur_point = null;
+                for (m in ms.markers) {
+                    var dval = d(ms.markers[m], target);
+                    if (dval < cur_min || cur_min == null) {
+                        cur_min = dval;
+                        cur_point = m;
+                    }
+                }
+
+                if(cur_min > 30 || cur_min === null){
+                    function guidGenerator() {
+                        var S4 = function() {
+                           return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+                        };
+                        return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+                    }
+
+                    false_negative_annotations+=1;
+                } else {
+                    delete local_markers[cur_point];
+                    true_positive_annotations+=1;
+                }
+            }
+        }
+     }
+
+     // before wrapping up, do a final pass for any false positives that someone may've highlighted
+     
+     for(key in local_markers){
+        var marker = local_markers[key]; 
+        var newMarker;
+        false_positive_annotations+=1;
+     }
+
+    // save a new event model
+    this.client.create('event', {
+        content: {
+            'type': 'required-performance',
+            'fp': false_positive_annotations,
+            'tp': true_positive_annotations,
+            'fn': false_negative_annotations
+        }
+    }, function(){
+        print("Required Performance Event: Saved!")
     });
 }
 
