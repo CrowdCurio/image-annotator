@@ -1163,7 +1163,7 @@ ImageAnnotator.prototype.loadTutorial = function(config){
     var steps = [
         {
         element: '#main-interface',
-        intro: "<b>Welcome!</b><p>Before you start transcribing, let us help you familiarize yourself with the interface.</p><p>Click \"Next\" to begin.</p>" 
+        intro: "<b>Welcome!</b><p>Before you start counting, let us help you familiarize yourself with the interface.</p><p>Click \"Next\" to begin.</p>" 
         },  
         {
         element: '#bottom-control-keypad',
@@ -1176,6 +1176,14 @@ ImageAnnotator.prototype.loadTutorial = function(config){
         {
         element: '#primary_countingboard',
         intro: "After clicking on a label, you'll see a few examples of what you're trying to count."
+        },
+        {
+            element: '#viewer',
+            intro: "To count a letter, click on the image to make an annotation. Each click will increase the count for the object. Try it!"
+        },
+        {
+            element: '#viewer',
+            intro: "Annotations can be <b>moved</b> by clicking and dragging the annotation. Annotations can be <b>deleted</b> by clicking on the annotation twice and clicking the \"Delete\" button that appears."
         },
         {
         element: '#map',
@@ -1548,6 +1556,7 @@ ImageAnnotator.prototype.addTool = function(event) {
         if (((new Date().getTime()) - surface.timeOfLastDrag) > 100 && !surface.hoveringOnMarker) {
             // Verify a label has been selected
             if($(".task-option-toggle.success").length == 0){
+                alert("In order to start counting, you need to have a label selected at the bottom of the page (e.g. Tau)!")
                 print("No label selected for counting.")
                 return;
             }
