@@ -3490,7 +3490,7 @@ CrowdCurioClient.prototype.init = function(params){
 
     /* artificially set things up */
     config['collaboration'] = {
-        'active' : false,
+        'active' : true,
         'policy': {
         }
     };
