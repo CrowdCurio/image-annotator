@@ -1,205 +1,9 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-function TaskRoutingManager(){
-    this.client = null;
-    this.queues = null;
-    this.params = null;
-    this.taskTotal = null;
-}
-
-
-TaskRoutingManager.prototype.init = function(client, params) {
-    if(!params){
-        alert('ERROR: Parameters are required for task routing.')
-    }
-
-    // "this.queues" is an Object that contains the task queues :
-    /*  key: name of the queue
-        value: Object containing the queue and the total number of available tasks.
-
-        example:
-        this.queues = {
-            'required': {
-                queue: [Object, Object, Object],
-                total: 10
-            }, 'practice' : {
-                queue: [Object, Object, Object]
-                total: 5
-            }
-        }
-
-    */
-    
-    this.client = client;
-    this.queues = {};
-    this.params = params;
-    this.taskTotal = -1;
-};
-
-
-TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback) {
-   // add the queue type
-    params['type'] = queue_type;
-    
-    var that = this;
-    let action = ["route", "list"]
-    return this.client.action(schema, action, params).then(function(response){
-        
-        // store the total number of tasks remaining
-        that.queues[params['type']]['total'] = response.count;
-
-        // store the fetched tasks into the queue
-        that.queues[params['type']]['queue'] = response.results;
-
-        // return the first item in the queue to the callback
-        callback(that.queues[params['type']]['queue'].shift());
-    });
-}
-
-TaskRoutingManager.prototype.getNextTask = function(queue_type, callback){
-    // verify the queue exists
-    if(!(queue_type in this.queues)){
-        this.queues[queue_type] = {'queue': [], 'total': 0};
-    }
-
-    if(this.queues[queue_type]['queue'].length > 1){
-        callback(this.queues[queue_type]['queue'].shift());
-    } else {
-        this.fetchTasks(queue_type, this.params, function(task){
-            callback(task);
-        });
-    }
-};
-
-// - - - - - - Simulation / Testing Helpers - - - - - 
-TaskRoutingManager.prototype.simulateFetchTasks = function(){
-    console.log('Simulating a fetch of new tasks ... Fetched!');
-
-    /* simualte populating the queue */
-    this.queues = [
-        {'id': 1, 'name': 'Papyri 1', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136833.jpg'},
-        {'id': 2, 'name': 'Papyri 2', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136834.jpg'},
-        {'id': 3, 'name': 'Papyri 3', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136835.jpg'},
-    ]
-}
-
-TaskRoutingManager.prototype.simulateGetNextTask = function(){
-    if(this.queue.length > 0){
-        return this.queues.shift();
-    } else {
-        return [];
-    }
-};
-
-
-function CrowdCurioClient(){
-    // core api vars
-    this.auth = null;
-    this.client = null;
-
-    // routing manager
-    this.router = null;
-
-    // routing vars
-    this.task = null;
-    this.data = null;
-    this.user = null;
-}
-
-CrowdCurioClient.prototype.init = function(params){
-    // authenticate & instantiate the client's connection
-    this.auth = new coreapi.auth.SessionAuthentication({
-        csrfCookieName: 'csrftoken',
-        csrfHeaderName: 'X-CSRFToken'
-    })
-    this.client = new coreapi.Client({auth: this.auth})
-
-    // create the task routing manager
-    this.router = new TaskRoutingManager();
-
-    // set (1) task and (2) experiment vars for routing
-    this.user = {id: params['user'], type: 'User'};
-    this.task = {id: params['task'], type: 'Task'};
-    if(params['experiment']){
-        this.experiment = {id: params['experiment'], type: 'Experiment'}
-
-        this.router.init(this.client, {
-            'page_size': 3,
-            'task': params['task'],
-            'experiment': params['experiment']
-        });
-
-    } else {
-        this.experiment = null;
-        
-        this.router.init(this.client, {
-            'page_size': 3,
-            'task': params['task']
-        });
-
-    }
-}
-
-CrowdCurioClient.prototype.setData = function(id){
-    this.data = {id: id, type: 'Data'};
-}
-
-CrowdCurioClient.prototype.getNextTask = function(queue_type, callback){
-    var that = this;
-    // call the router's get next task function.
-    this.router.getNextTask(queue_type, function(task){
-        // if no task was returned from the API, return an empty object
-        if(task === undefined){
-            callback({});
-        } else {
-            // return the task
-            callback(task);
-        }
-    });
-}
-
-
-// General-Purpose CRUD Operations for Models
-
-CrowdCurioClient.prototype.create = function(model, params, callback){
-    var that = this;
-    // extend params by adding relations
-    if(model === 'response'){
-        params = jQuery.extend({
-            owner: that.user,
-            data: that.data,
-            task: that.task,
-            experiment: that.experiment,
-            condition: that.condition
-        }, params);
-    } else if (model === 'event'){
-        params = jQuery.extend({
-            user: that.user,
-            experiment: that.experiment,
-            condition: that.condition
-        }, params);
-    }
-
-    let action = [model, "create"];
-    this.client.action(schema, action, params).then(function(result) {
-        callback(result);
-    });
-}
-
-CrowdCurioClient.prototype.update = function(model, params, callback){
-    let action = [model, "update"];
-    this.client.action(schema, action, params).then(function(result) {
-        callback(result);
-    });
-}
-
-
-module.exports = CrowdCurioClient;
-},{}],2:[function(require,module,exports){
 (function (global){
 var $ = require('jquery');
 require('rangeslider.js');
 var ImageMiniMap = require('./image-mini-map');
-var CrowdCurioClient = require('./crowdcurio-client');
+var CrowdCurioClient = require('crowdcurio-client');
 require('hammerjs');
 require('materialize-css');
 var IntroJS = require('intro.js');
@@ -371,7 +175,16 @@ ImageAnnotator.prototype.initialize = function (config) {
     this.render(config);
 
     /* init the crowdcurio client */
-    this.client.init({task: window.task, user: window.user, experiment: window.experiment, condition: window.condition});
+    this.client.init({
+        task: window.task, 
+        user: window.user, 
+        experiment: window.experiment, 
+        condition: window.condition});
+
+    /* override the receiving function for interface events */
+    this.client.task_session.setListeners({
+        "receive": that.handleInterfaceUpdate
+    });
 
     // define an image w/ load events
     global.oImg = new Image(); //$('.subject');
@@ -1551,6 +1364,7 @@ ImageAnnotator.prototype.addTool = function(event) {
 
             /*  add the marker to the storage unit */
             surface.markers[surface.selection] = new Marker(x.toPrecision(3)/zoom, y.toPrecision(3)/zoom, label, rotation);
+            this.sendInterfaceUpdate({'create': 'test'});
         }
     } else if(surface.mode == "counting") {
         if (((new Date().getTime()) - surface.timeOfLastDrag) > 100 && !surface.hoveringOnMarker) {
@@ -1630,6 +1444,7 @@ ImageAnnotator.prototype.addTool = function(event) {
 
             /*  add the marker to the storage unit */
             surface.markers[surface.selection] = new Marker(x.toPrecision(3)/zoom, y.toPrecision(3)/zoom, label, rotation);
+            this.sendInterfaceUpdate({'create': 'test'});
         }
     }
 };
@@ -1870,7 +1685,7 @@ ImageAnnotator.prototype.hoverToolOn = function(e){
     this.hoveringOnMarker = true;
     var ele = $(e.target);
     ele.addClass('hovering');
-    var marker = this.markers[e.target.id.split('-')[1]];
+    var marker = this.markers[ele.attr('id').split('-')[1]];
     var zoom = parseFloat($("#zoom").val());
     var scaler;
     if(zoom === 0.75){
@@ -1900,7 +1715,7 @@ ImageAnnotator.prototype.hoverToolOff = function(e){
     this.hoveringOnMarker = false;
     var ele = $(e.target);
     ele.removeClass('hovering');
-    var marker = this.markers[e.target.id.split('-')[1]];
+    var marker = this.markers[ele.attr('id').split('-')[1]];
     var markerSize = parseInt($("#m_size").val(), 10);
     var zoom = parseFloat($("#zoom").val());
     var scaler;
@@ -3346,9 +3161,20 @@ ImageAnnotator.prototype.countMarkers = function() {
     return Object.size(surface.markers);
 };
 
+/* Fucntions for real-time updates */
+ImageAnnotator.prototype.sendInterfaceUpdate = function(event){
+    this.client.task_session.send(event);
+};
+
+ImageAnnotator.prototype.handleInterfaceUpdate = function(event){
+    print("This should update the interface based on the received message: ");
+    console.log(event);
+};
+
+
 module.exports = ImageAnnotator;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./crowdcurio-client":1,"./image-mini-map":3,"hammerjs":5,"intro.js":6,"jquery":9,"materialize-css":10,"rangeslider.js":12}],3:[function(require,module,exports){
+},{"./image-mini-map":2,"crowdcurio-client":4,"hammerjs":7,"intro.js":8,"jquery":11,"materialize-css":12,"rangeslider.js":14}],2:[function(require,module,exports){
 /*      file:       papyri-mini-map.js
         author:     alex c. williams
         description:
@@ -3583,7 +3409,7 @@ ImageMiniMap.prototype.map_check = function(thumb_img, fragment_img) {
 };
 
 module.exports = ImageMiniMap;
-},{"jquery":9,"jquery-ui-browserify":8}],4:[function(require,module,exports){
+},{"jquery":11,"jquery-ui-browserify":10}],3:[function(require,module,exports){
 (function (global){
 //  file:   main.js
 //  author: alex w.
@@ -3610,7 +3436,826 @@ function start(configuration){
 /* create the interface */
 start(config);
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./image-annotator":2,"jquery":9}],5:[function(require,module,exports){
+},{"./image-annotator":1,"jquery":11}],4:[function(require,module,exports){
+var TaskRoutingManager = require('./task-router');
+var TaskSession = require('./task-session');
+
+function CrowdCurioClient(){
+    // core api vars
+    this.auth = null;
+    this.client = null;
+    this.task_session = null;
+
+    // routing manager
+    this.router = null;
+
+    // routing vars
+    this.task = null;
+    this.data = null;
+    this.user = null;
+}
+
+CrowdCurioClient.prototype.init = function(params){
+    // authenticate & instantiate the client's connection
+    this.auth = new coreapi.auth.SessionAuthentication({
+        csrfCookieName: 'csrftoken',
+        csrfHeaderName: 'X-CSRFToken'
+    })
+    this.client = new coreapi.Client({auth: this.auth})
+
+    // create the task routing manager
+    this.router = new TaskRoutingManager();
+
+    // set (1) task and (2) experiment vars for routing
+    this.user = {id: params['user'], type: 'User'};
+    this.task = {id: params['task'], type: 'Task'};
+    if(params['experiment'] !== undefined && params['experiment'] > 0){
+        this.experiment = {id: params['experiment'], type: 'Experiment'}
+
+        this.router.init(this.client, {
+            'page_size': 3,
+            'task': params['task'],
+            'experiment': params['experiment'],
+            'condition': params['condition']
+        });
+
+    } else {
+        this.experiment = null;
+        
+        this.router.init(this.client, {
+            'page_size': 3,
+            'task': params['task']
+        });
+    }
+
+    /* artificially set things up */
+    config['collaboration'] = {
+        'active' : false,
+        'policy': {
+        }
+    };
+
+    // if collaboration is active, create and initialize a task session
+    if(config['collaboration']){
+        if(config['collaboration']['active']){
+            this.task_session = new TaskSession();
+            this.task_session.init(jQuery.extend({ 'client': this.client}, params));
+        }
+    }
+}
+
+CrowdCurioClient.prototype.setData = function(id){
+    this.data = {id: id, type: 'Data'};
+}
+
+CrowdCurioClient.prototype.getNextTask = function(queue_type, callback){
+    var that = this;
+    // call the router's get next task function.
+    this.router.getNextTask(queue_type, function(task){
+        // if no task was returned from the API, return an empty object
+        if(task === undefined){
+            callback({});
+        } else {
+            // return the task
+            callback(task);
+        }
+    });
+}
+
+
+// General-Purpose CRUD Operations for Models
+// note: create is supported for two models (event/response)
+// update and partialUpdate are supported for all models
+// list and listAll are supported for two models (response/data)
+// delete is supported for all models
+CrowdCurioClient.prototype.create = function(model, params, callback){
+    var that = this;
+    // extend params by adding relations
+    if(model === 'response'){
+        params = jQuery.extend({
+            owner: that.user,
+            data: that.data,
+            task: that.task,
+            experiment: that.experiment,
+            condition: that.condition
+        }, params);
+    } else if (model === 'event'){
+        params = jQuery.extend({
+            user: that.user,
+            experiment: that.experiment,
+            condition: that.condition
+        }, params);
+    }
+
+    let action = [model, "create"];
+    this.client.action(schema, action, params).then(function(result) {
+        callback(result);
+    });
+}
+
+CrowdCurioClient.prototype.update = function(model, params, callback){
+    let action = [model, "update"];
+    this.client.action(schema, action, params).then(function(result) {
+        callback(result);
+    });
+}
+
+CrowdCurioClient.prototype.partialUpdate = function(model, params, callback){
+    let action = [model, "partial_update"];
+    this.client.action(schema, action, params).then(function(result) {
+        callback(result);
+    });
+}
+
+CrowdCurioClient.prototype.list = function(model, params, callback){
+    var that = this;
+    // extend params by adding relations
+    if(model === 'response'){
+        if (that.user) {
+            params.owner = that.user.id;
+        }
+        if (that.data) {
+            params.data = that.data.id;
+        }
+        if (that.task) {
+            params.task = that.task.id;
+        }
+        if (that.experiment) {
+            params.experiment = that.experiment.id;
+        }
+        if (that.condition) {
+            params.condition = that.condition.id;
+        }
+    } else if (model === 'data'){
+        if (that.task) {
+            params.task = that.task.id;
+        }
+        if (that.experiment) {
+            params.experiment = that.experiment.id;
+        }
+        if (that.condition) {
+            params.condition = that.condition.id;
+        }
+    }
+
+    let action = [model, "list"];
+    this.client.action(schema, action, params).then(function(result) {
+        callback(result);
+    });
+}
+
+CrowdCurioClient.prototype.listAll = function(model, params, callback){
+    let that = this;
+    let results = [];
+    params.page = 1;
+    listNextPage();
+    function listNextPage() {
+        that.list(model, params, function(response) {
+            Array.prototype.push.apply(results, response.results);
+            if (!response.links.next) {
+                callback(results);
+                return;
+            }
+            params.page += 1;
+            listNextPage();
+        });
+    };
+}
+
+CrowdCurioClient.prototype.delete = function(model, params, callback){
+    let action = [model, "delete"];
+    this.client.action(schema, action, params).then(function(result) {
+        callback(result);
+    });
+}
+
+
+module.exports = CrowdCurioClient;
+},{"./task-router":5,"./task-session":6}],5:[function(require,module,exports){
+function TaskRoutingManager(){
+    this.client = null;
+    this.queues = null;
+    this.params = null;
+    this.taskTotal = null;
+}
+
+
+TaskRoutingManager.prototype.init = function(client, params) {
+    if(!params){
+        alert('ERROR: Parameters are required for task routing.')
+    }
+
+    // "this.queues" is an Object that contains the task queues :
+    /*  key: name of the queue
+        value: Object containing the queue and the total number of available tasks.
+
+        example:
+        this.queues = {
+            'required': {
+                queue: [Object, Object, Object],
+                total: 10
+            }, 'practice' : {
+                queue: [Object, Object, Object]
+                total: 5
+            }
+        }
+
+    */
+    
+    this.client = client;
+    this.queues = {};
+    this.params = params;
+    this.taskTotal = -1;
+};
+
+
+TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback) {
+   // add the queue type
+    params['type'] = queue_type;
+    
+    var that = this;
+    let action = ["route", "list"]
+    return this.client.action(schema, action, params).then(function(response){
+        
+        // store the total number of tasks remaining
+        that.queues[params['type']]['total'] = response.count;
+
+        // store the fetched tasks into the queue
+        that.queues[params['type']]['queue'] = response.results;
+
+        // return the first item in the queue to the callback
+        callback(that.queues[params['type']]['queue'].shift());
+    });
+}
+
+TaskRoutingManager.prototype.getNextTask = function(queue_type, callback){
+    // verify the queue exists
+    if(!(queue_type in this.queues)){
+        this.queues[queue_type] = {'queue': [], 'total': 0};
+    }
+
+    if(this.queues[queue_type]['queue'].length > 1){
+        callback(this.queues[queue_type]['queue'].shift());
+    } else {
+        this.fetchTasks(queue_type, this.params, function(task){
+            callback(task);
+        });
+    }
+};
+
+// - - - - - - Simulation / Testing Helpers - - - - - 
+TaskRoutingManager.prototype.simulateFetchTasks = function(){
+    console.log('Simulating a fetch of new tasks ... Fetched!');
+
+    /* simualte populating the queue */
+    this.queues = [
+        {'id': 1, 'name': 'Papyri 1', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136833.jpg'},
+        {'id': 2, 'name': 'Papyri 2', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136834.jpg'},
+        {'id': 3, 'name': 'Papyri 3', 'url': 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/136835.jpg'},
+    ]
+}
+
+TaskRoutingManager.prototype.simulateGetNextTask = function(){
+    if(this.queue.length > 0){
+        return this.queues.shift();
+    } else {
+        return [];
+    }
+};
+
+module.exports = TaskRoutingManager;
+},{}],6:[function(require,module,exports){
+var ReconnectingWebSocket = require('reconnectingwebsocket');
+
+Array.prototype.diff = function (a) {
+    return this.filter(function (i) {
+        return a.indexOf(i) === -1;
+    });
+};
+
+function print(message){
+    var currentDate = '[' + new Date().toUTCString() + '] ';
+    console.log(currentDate+message)
+}
+
+function TaskSession(){
+    this.model = 'tasksession';
+    this.client = null;
+    this.present = null;
+    this.connected = false;
+    this.connected_users = [];
+
+    // relations
+    this.user = null;
+    this.task = null;
+    this.experiment = null;
+    this.condition = null;
+    this.task_session = null;
+    this.task_session_policy = null;
+    this.socket = null;
+
+    // ui action bindings
+    this.handleInterfaceAction = null;
+}
+
+/**
+ * Initializes the TaskSession instance by fetching the associated policy and 
+ * retrieving a session for the user.
+ * @param {Object} params 
+ */
+TaskSession.prototype.init = function(params) {
+    // This function should initialize the TaskSession.
+    var that = this;
+    print('Initializing session.');
+
+    // authenticate & instantiate the client's connection
+    this.client = params['client']
+
+    // set (1) task and (2) experiment vars
+    this.user = {id: params['user'], type: 'User'};
+    this.task = {id: params['task'], type: 'Task'};
+    if(params['experiment']){
+        this.experiment = {id: params['experiment'], type: 'Experiment'}
+    } else {
+        this.experiment = null;
+    }
+    if(params['condition']){
+        this.condition = {id: params['condition'], type: 'Condition'}
+    } else {
+        this.condition = null;
+    }
+
+    // set a default handler for receiving ui events
+    this.handleInterfaceAction = function(event){
+        print("ERROR: Can't handle transmitted interface event. (E: "+event+" )");
+    }
+
+    // fetch the task policy
+    this.fetchPolicy().then(function(policy){
+        if(policy !== null){
+            that.task_session_policy = policy;
+
+            // find the task session id for the user
+            that.find().then(function(id){
+                print("Session Retrieved: "+id);
+                that.task_session = id;
+                that.connect(that.task_session);
+            });
+        } else {
+            print("ERROR: Can't find an associated policy.")
+        }
+    });
+}
+
+/**
+ * Sets callbacks that are executed when new events are sent and received.
+ * 
+ *  Structure of obj should be:
+ *      {
+ *          'send': function(){ ... },
+ *          'receive': function(){ ... }
+ *      }
+ * 
+ * @param {Object} obj 
+ */
+TaskSession.prototype.setListeners = function(obj){
+    if('send' in obj && typeof obj['send'] === "function"){
+        this.send = obj['send'];
+    }
+    if('receive' in obj && typeof obj['receive'] === "function"){
+        this.handleInterfaceAction = obj['receive'];
+    }
+};
+
+/**
+ * Creates a TaskSession objects with a given channel name.
+ * @param {String} channel_name 
+ */
+TaskSession.prototype.create = function(channel_name){
+    return new Promise(function(resolve, reject) {
+        // This function should find the session for the user.
+        print("Creating Session ...");
+
+        // set params
+        params = {
+            //slug: 'task-session-'+this.task.id +'-'+this.experiment.id+'-'+this.condition.id,//+Math.random().toString(36).substr(2, 9),
+            task: this.task,
+            experiment: this.experiment,
+            condition: this.condition,
+            channel_name: channel_name
+        }
+
+        let action = [this.model, "create"];
+        this.client.action(schema, action, params).then(function(resp) {
+            print("Session Created:");
+            resolve(resp.id);
+        });
+    }.bind(this));
+}
+
+/**
+ * Finds the Task Session ID for the User.
+ *  Step (1): Check if User belongs to a session for this task / experiment / condition combination.
+ *  Step (2): If not, find a task session with available space.
+ *  Step (3): If all sessions are full, create a new task session.
+ */
+TaskSession.prototype.find = function(){
+    var that = this;
+    return new Promise(function(resolve, reject) {
+        print("Finding an available task session ...");
+        $.ajaxSetup({
+            beforeSend: function(xhr, settings) {
+                if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+                    xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                }
+            }
+        });
+
+        $.ajax({
+            type: 'POST',
+            url: "/collaboration/route/",
+            data: {
+                'csrftoken': csrftoken,
+                'user': that.user.id,
+                'experiment': that.experiment.id,
+                'condition': that.condition.id,
+                'task': that.task.id
+            },
+            success: function(payload){
+                /* on success, just refresh the page */
+                print("Payload:");
+                console.log(payload);
+                that.channel_name = payload['channel_name'];
+                resolve(payload['session_id']);
+            }
+        });
+    }.bind(this));
+}
+
+/**
+ * Fetches the Task Policy used for auto-generating task sessions.
+ */
+TaskSession.prototype.fetchPolicy = function(){
+    var that = this;
+    return new Promise(function(resolve, reject) {
+        print("Fetching policy ...");
+
+        // set params
+        params = {
+            task: this.task.id,
+            experiment: this.experiment.id,
+            condition: this.condition.id
+        }
+
+        let action = ['tasksessionpolicy', "list"];
+        this.client.action(schema, action, params).then(function(resp) {
+            if(resp.count < 1){
+                // if we get here, no policy exists for generating task sessions.
+                resolve(null);
+            } else {
+                print("Policy retrieved: "+resp.results[0].id);
+                resolve(resp.results[0].id);
+            }
+        });
+    }.bind(this));
+}
+
+/**
+ * Connects and maintains a valid websocket connection for a particula task session
+ */
+TaskSession.prototype.connect = function(roomId){
+    $("#task-container").append('<div id="chats"></div>');
+
+    var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+    var ws_path = ws_scheme + '://' + window.location.host + "/collaboration/stream/";
+    print("Connecting: " + ws_path);
+    this.socket = new ReconnectingWebSocket(ws_path);
+    var that = this;
+
+    function updateUserList(){
+        // recursively check if the chat interface has rendered. when it has, update the count.
+        if($("#chat-user-count").length === 0){
+            setTimeout(function(){
+                updateUserList();
+            }, 100);
+            return;
+        } else {
+            var data = that.userList;
+            // update the user count
+            var ele = $("#chat-user-count");
+            ele.empty().html(data['payload']['members'].length + ' <i class="fa fa-user" aria-hidden="true"></i>');
+
+            // build the new tooltip html
+            var tooltip_html = '';
+            for(var i=0; i < data['payload']['members'].length; i++){
+                tooltip_html += data['payload']['members'][i];
+                if(i != data['payload']['members'.length-1]){
+                    tooltip_html += '<br/>';
+                }
+            }
+
+            // find the difference between the connected users and the new set of task session members
+            var diff = that.connected_users.diff(data['payload']['members']);
+            var diff = diff[0];
+
+            // if there's a difference, update the ui.
+            if(typeof diff !== 'undefined' && diff){
+                // add the message for the user who left and scroll
+                var msgdiv = $('#chat-messages');
+                msgdiv.append("<div class='contextual-message text-muted'>" + diff + " left the room!" + "</div>");
+                msgdiv.scrollTop(msgdiv.prop("scrollHeight"));
+            }   
+
+            // update the tooltip
+            ele.attr('data-tooltip', tooltip_html);
+            ele.tooltip({delay: 25, tooltip: tooltip_html, html: true});
+
+            // update the list of connected users
+            that.connected_users = data['payload']['members'];
+        }
+    }
+
+    // Helpful debugging
+    this.socket.onopen = function () {
+        if(that.connected){
+            return;
+        }
+
+        that.connected = true;
+
+        print("Connected: "+roomId);
+        that.socket.send(JSON.stringify({
+            "command": "join",  // determines which handler will be used (see chat/routing.py)
+            "task_session": roomId,
+            "channel_name": that.channel_name,
+            "task": that.task.id,
+            "experiment": that.experiment.id,
+            "condition": that.condition.id,
+        }));
+
+        /* fetch the last 10 messages */
+        that.fetch("message", {task_session: roomId}, function(messages){
+            function convertTimestamp(ts){
+                var v = ts.split('T')
+                var t = v[0].split('-');
+                var year = t[0];
+                var month = t[2];
+                var day = t[1];
+                var time = v[1].split('.')[0].split(',')[0];
+                return day+"/"+month+"/"+year+" @ "+time;
+            }
+
+            var message_set = '';
+            for(var i=messages.results.length-1; i >= 0; i--){
+                var message = messages.results[i]
+                var navbar_username = $("#user-logged-in a").text();
+                var direction = 'in';
+                if(navbar_username === message.handle){
+                    direction = 'out';
+                }
+                var message_time = message.created;
+
+                // Message
+                ok_msg = '<div class="message '+direction+' no-avatar">\
+                        <!-- BEGIN MESSAGE SENDER INFO -->\
+                        <div class="sender">\
+                            <a href="javascript:void(0);" title="Rufat Askerov">\
+                                <img src="assets/img/avatar.png" class="avatar" alt="Rufat Askerov">\
+                            </a>\
+                        </div>\
+                        <!-- END MESSAGE SENDER INFO -->\
+                        <div class="body">\
+                        <!-- BEGIN MESSAGE CONTENT-->\
+                        <div class="content"><span>'+message.content+'</span></div>\
+                        <!-- BEGIN MESSAGE CONTENT  -->\
+                        <!-- BEGIN MESSAGE SEND TIME -->\
+                        <div class="seen"><span>'+convertTimestamp(message_time)+'</span> </div>\
+                        <!-- BEGIN MESSAGE SEND TIME -->\
+                        </div>\
+                        <div class="clear"></div>\
+                    </div>';
+                message_set+=ok_msg;
+            };
+            var msgdiv = $(".messages");
+            msgdiv.append(message_set);
+
+            // scroll to the bottom of the messages div
+            var msgdiv = $('#chat-messages');
+            msgdiv.scrollTop(msgdiv.prop("scrollHeight"));
+        });
+    };
+
+    that.socket.onclose = function () {
+        print("Disconnected from chat socket");
+        that.socket.send(JSON.stringify({
+            "command": "leave",  // determines which handler will be used (see chat/routing.py)
+            "task_session": roomId
+        }));
+    };
+
+    that.socket.onmessage = function (message) {
+        // Decode the JSON
+        print("Got websocket message " + message.data);
+        var data = JSON.parse(message.data);
+        // Handle errors
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        // Handle joining
+        if (data.payload.join) {
+            if($("#default-chat-box-header").length === 0){
+                /* create chat box */
+                var roomdiv = $(
+                    '<!-- BEGIN CHAT BOX HEADER -->\
+                    <div id="default-chat-box-header" class="box-header blue-grey darken-4">\
+                        <!-- BEGIN USER INFO -->\
+                        <div class="info">\
+                            <span class="box-username">\
+                                <a href="#">Chat\
+                            </span>\
+                        </div>\
+                        <!-- END USER INFO -->\
+                        <a href="#" style="float: right;margin-right: 15px;color: white;"><i class="fa fa-cog" aria-hidden="true"></i><!-- END USER INFO --></a>\
+                        <a id="chat-user-count" href="#" style="float: right;margin-right: 15px;color: white;" class="tooltipped" data-position="top" data-delay="25" data-tooltip="You">\
+                            <div class="preloader-wrapper small active" style="height:18px;width:18px;">\
+                                <div class="spinner-layer spinner-green-only">\
+                                <div class="circle-clipper left">\
+                                    <div class="circle"></div>\
+                                </div><div class="gap-patch">\
+                                    <div class="circle"></div>\
+                                </div><div class="circle-clipper right">\
+                                    <div class="circle"></div>\
+                                </div>\
+                                </div>\
+                            </div>\
+                        </a>\
+                    </div>\
+                    <!-- END CHAT BOX HEADER -->\
+                    <!-- BEGIN CHAT BOX BODY -->\
+                    <div class="box-body">\
+                        <div class="status online"></div>\
+                        <!-- BEGIN MESSAGES -->\
+                        <div class="message-scrooler">\
+                            <div id="chat-messages" class="messages">\
+                            </div>\
+                        </div>\
+                    </div>\
+                    <!-- END MESSAGES -->\
+                </div>\
+                <!-- END CHAT BOX BODY -->\
+                <!-- BEGIN CHAT BOX FOOTER -->\
+                <div class="box-footer">\
+                    <!-- BEGIN  WRITE MESSAGE -->\
+                    <div class="item send-message">\
+                        <input id="chat-input-box" class="textarea" placeholder="Write message">\
+                        </input>\
+                    </div>\
+                    <!-- END WRITE MESSAGE -->\
+                    <!-- BEGIN ADD FILE -->\
+                    <div id="chat-send-button" class="item file">\
+                    <i class="fa fa-paper-plane" aria-hidden="true"></i>\
+                    </div>\
+                    <!-- END ADD FILE -->\
+                </div>\
+                <!-- END CHAT BOX FOOTER -->\
+                <div class="box-footer-end blue-grey darken-4"></div>');
+                $("#chats").append(roomdiv);
+                $("#chat-send-button").on("click", function () {
+                    that.socket.send(JSON.stringify({
+                        "command": "send",
+                        "task_session": data.payload.join,
+                        "message": $("#chat-input-box").val().trim()
+                    }));
+                    $("#chat-input-box").val("");
+                });
+
+                // add the tooltip functionality
+                $('.tooltipped').tooltip({delay: 25, tooltip: 'Loading', html: true});
+
+                $("#chat-input-box").keypress(function(e) {
+                    if(e.which == 13) {
+                        that.socket.send(JSON.stringify({
+                            "command": "send",
+                            "task_session": data.payload.join,
+                            "message": $("#chat-input-box").val().trim()
+                        }));
+                        $("#chat-input-box").val("");
+                    }
+                });
+            }
+            // Handle leaving
+        } else if (data.payload.leave) {
+            print("Leaving room " + data.payload.leave);
+            $("#room-" + data.payload.leave).remove();
+        } else if (data.payload.message || data.msg_type !== 0) {
+            var msgdiv = $(".messages");
+            var ok_msg = "";
+            // msg types are defined in chat/settings.py
+            // Only for demo purposes is hardcoded, in production scenarios, consider call a service.
+            switch (data.msg_type) {
+                case 0:
+                    var navbar_username = $("#user-logged-in a").text();
+                    var direction = 'in';
+                    if(navbar_username === data.payload.username){
+                        direction = 'out';
+                    }
+
+                    // calculate time
+                    var currentdate = new Date(); 
+                    var datetime = (currentdate.getMonth()+1) + "/"
+                                    + currentdate.getDate()  + "/" 
+                                    + currentdate.getFullYear() + " @ "  
+                                    + currentdate.getHours() + ":"  
+                                    + currentdate.getMinutes() + ":" 
+                                    + currentdate.getSeconds();
+
+                    // Message
+                    ok_msg = '<div class="message '+direction+' no-avatar">\
+                            <!-- BEGIN MESSAGE SENDER INFO -->\
+                            <div class="sender">\
+                                <a href="javascript:void(0);" title="Rufat Askerov">\
+                                    <img class="avatar" alt="Rufat Askerov">\
+                                </a>\
+                            </div>\
+                            <!-- END MESSAGE SENDER INFO -->\
+                            <div class="body">\
+                            <!-- BEGIN MESSAGE CONTENT-->\
+                            <div class="content"><span>'+data.payload.message+'</span></div>\
+                            <!-- BEGIN MESSAGE CONTENT  -->\
+                            <!-- BEGIN MESSAGE SEND TIME -->\
+                            <div class="seen"><span>'+datetime+'</span> </div>\
+                            <!-- BEGIN MESSAGE SEND TIME -->\
+                            </div>\
+                            <div class="clear"></div>\
+                        </div>';
+                    break;
+                case 1:
+                    // Warning/Advice messages
+                    ok_msg = "<div class='contextual-message text-warning'>" + data.payload.message + "</div>";
+                    break;
+                case 2:
+                    // Alert/Danger messages
+                    ok_msg = "<div class='contextual-message text-danger'>" + data.payload.message + "</div>";
+                    break;
+                case 3:
+                    // "Muted" messages
+                    ok_msg = "<div class='contextual-message text-muted'>" + data.payload.message + "</div>";
+                    break;
+                case 4:
+                    // User joined room
+                    ok_msg = "<div class='contextual-message text-muted'>" + data.payload.username + " joined the room!" + "</div>";
+                    break;
+                case 5:
+                    // User left room
+                    ok_msg = "<div class='contextual-message text-muted'>" + data.payload.username + " left the room!" + "</div>";
+                    break;
+                case 6: // Server is updating us with active users in session
+                    that.userList = data;
+                    updateUserList();
+                    return;
+                case 9:
+                    that.handleInterfaceAction(data);
+                default:
+                    print("Unsupported message type!");
+                    return;
+            }
+            msgdiv.append(ok_msg);
+            msgdiv.scrollTop(msgdiv.prop("scrollHeight"));
+        } else {
+            print("Cannot handle message!");
+        }
+    };
+
+}
+
+/**
+ * Sends an interface event to the websocket.
+ * @param {*} msg 
+ */
+TaskSession.prototype.send = function(event){
+    var that = this;
+    this.socket.send(JSON.stringify({
+        "command": "interface",
+        "task_session": that.task_session,
+        "event": event
+    }));
+}
+
+/**
+ * A general-purpose function for listing data from the server.
+ * @param {*} model 
+ * @param {*} callback 
+ */
+TaskSession.prototype.fetch = function(model, params, callback){
+    let action = ["message", "list"];
+    this.client.action(schema, action, params).then(function(resp) {
+        callback(resp);
+    });
+}
+
+module.exports = TaskSession;
+},{"reconnectingwebsocket":15}],7:[function(require,module,exports){
 /*! Hammer.JS - v2.0.7 - 2016-04-22
  * http://hammerjs.github.io/
  *
@@ -6255,7 +6900,7 @@ if (typeof define === 'function' && define.amd) {
 
 })(window, document, 'Hammer');
 
-},{}],6:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /**
  * Intro.js v2.8.0-alpha.1
  * https://github.com/usablica/intro.js
@@ -8411,7 +9056,7 @@ if (typeof define === 'function' && define.amd) {
   return introJs;
 }));
 
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /*! jQuery UI - v1.11.0pre - 2013-09-27
 * http://jqueryui.com
 * Includes: jquery.ui.core.js, jquery.ui.widget.js, jquery.ui.mouse.js, jquery.ui.draggable.js, jquery.ui.droppable.js, jquery.ui.resizable.js, jquery.ui.selectable.js, jquery.ui.sortable.js, jquery.ui.effect.js, jquery.ui.accordion.js, jquery.ui.autocomplete.js, jquery.ui.button.js, jquery.ui.datepicker.js, jquery.ui.dialog.js, jquery.ui.effect-blind.js, jquery.ui.effect-bounce.js, jquery.ui.effect-clip.js, jquery.ui.effect-drop.js, jquery.ui.effect-explode.js, jquery.ui.effect-fade.js, jquery.ui.effect-fold.js, jquery.ui.effect-highlight.js, jquery.ui.effect-puff.js, jquery.ui.effect-pulsate.js, jquery.ui.effect-scale.js, jquery.ui.effect-shake.js, jquery.ui.effect-size.js, jquery.ui.effect-slide.js, jquery.ui.effect-transfer.js, jquery.ui.menu.js, jquery.ui.position.js, jquery.ui.progressbar.js, jquery.ui.slider.js, jquery.ui.spinner.js, jquery.ui.tabs.js, jquery.ui.tooltip.js
@@ -23517,10 +24162,10 @@ $.widget( "ui.tooltip", {
 
 }( jQuery ) );*/
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 $ = jQuery = require('jquery');
 module.exports = require('./dist/jquery-ui.js');
-},{"./dist/jquery-ui.js":7,"jquery":9}],9:[function(require,module,exports){
+},{"./dist/jquery-ui.js":9,"jquery":11}],11:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v1.11.1
  * http://jquery.com/
@@ -33830,7 +34475,7 @@ return jQuery;
 
 }));
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /*!
  * Materialize v0.100.2 (http://materializecss.com)
  * Copyright 2014-2017 Materialize
@@ -43853,7 +44498,7 @@ if (Vel) {
   };
 })(jQuery);
 
-},{"hammerjs":5,"jquery":11}],11:[function(require,module,exports){
+},{"hammerjs":7,"jquery":13}],13:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.2.1
  * https://jquery.com/
@@ -54108,7 +54753,7 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],12:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /*! rangeslider.js - v2.3.1 | (c) 2017 @andreruffert | MIT license | https://github.com/andreruffert/rangeslider.js */
 (function(factory) {
     'use strict';
@@ -54604,4 +55249,367 @@ return jQuery;
 
 }));
 
-},{"jquery":9}]},{},[4]);
+},{"jquery":11}],15:[function(require,module,exports){
+// MIT License:
+//
+// Copyright (c) 2010-2012, Joe Walnes
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+/**
+ * This behaves like a WebSocket in every way, except if it fails to connect,
+ * or it gets disconnected, it will repeatedly poll until it successfully connects
+ * again.
+ *
+ * It is API compatible, so when you have:
+ *   ws = new WebSocket('ws://....');
+ * you can replace with:
+ *   ws = new ReconnectingWebSocket('ws://....');
+ *
+ * The event stream will typically look like:
+ *  onconnecting
+ *  onopen
+ *  onmessage
+ *  onmessage
+ *  onclose // lost connection
+ *  onconnecting
+ *  onopen  // sometime later...
+ *  onmessage
+ *  onmessage
+ *  etc...
+ *
+ * It is API compatible with the standard WebSocket API, apart from the following members:
+ *
+ * - `bufferedAmount`
+ * - `extensions`
+ * - `binaryType`
+ *
+ * Latest version: https://github.com/joewalnes/reconnecting-websocket/
+ * - Joe Walnes
+ *
+ * Syntax
+ * ======
+ * var socket = new ReconnectingWebSocket(url, protocols, options);
+ *
+ * Parameters
+ * ==========
+ * url - The url you are connecting to.
+ * protocols - Optional string or array of protocols.
+ * options - See below
+ *
+ * Options
+ * =======
+ * Options can either be passed upon instantiation or set after instantiation:
+ *
+ * var socket = new ReconnectingWebSocket(url, null, { debug: true, reconnectInterval: 4000 });
+ *
+ * or
+ *
+ * var socket = new ReconnectingWebSocket(url);
+ * socket.debug = true;
+ * socket.reconnectInterval = 4000;
+ *
+ * debug
+ * - Whether this instance should log debug messages. Accepts true or false. Default: false.
+ *
+ * automaticOpen
+ * - Whether or not the websocket should attempt to connect immediately upon instantiation. The socket can be manually opened or closed at any time using ws.open() and ws.close().
+ *
+ * reconnectInterval
+ * - The number of milliseconds to delay before attempting to reconnect. Accepts integer. Default: 1000.
+ *
+ * maxReconnectInterval
+ * - The maximum number of milliseconds to delay a reconnection attempt. Accepts integer. Default: 30000.
+ *
+ * reconnectDecay
+ * - The rate of increase of the reconnect delay. Allows reconnect attempts to back off when problems persist. Accepts integer or float. Default: 1.5.
+ *
+ * timeoutInterval
+ * - The maximum time in milliseconds to wait for a connection to succeed before closing and retrying. Accepts integer. Default: 2000.
+ *
+ */
+(function (global, factory) {
+    if (typeof define === 'function' && define.amd) {
+        define([], factory);
+    } else if (typeof module !== 'undefined' && module.exports){
+        module.exports = factory();
+    } else {
+        global.ReconnectingWebSocket = factory();
+    }
+})(this, function () {
+
+    if (!('WebSocket' in window)) {
+        return;
+    }
+
+    function ReconnectingWebSocket(url, protocols, options) {
+
+        // Default settings
+        var settings = {
+
+            /** Whether this instance should log debug messages. */
+            debug: false,
+
+            /** Whether or not the websocket should attempt to connect immediately upon instantiation. */
+            automaticOpen: true,
+
+            /** The number of milliseconds to delay before attempting to reconnect. */
+            reconnectInterval: 1000,
+            /** The maximum number of milliseconds to delay a reconnection attempt. */
+            maxReconnectInterval: 30000,
+            /** The rate of increase of the reconnect delay. Allows reconnect attempts to back off when problems persist. */
+            reconnectDecay: 1.5,
+
+            /** The maximum time in milliseconds to wait for a connection to succeed before closing and retrying. */
+            timeoutInterval: 2000,
+
+            /** The maximum number of reconnection attempts to make. Unlimited if null. */
+            maxReconnectAttempts: null
+        }
+        if (!options) { options = {}; }
+
+        // Overwrite and define settings with options if they exist.
+        for (var key in settings) {
+            if (typeof options[key] !== 'undefined') {
+                this[key] = options[key];
+            } else {
+                this[key] = settings[key];
+            }
+        }
+
+        // These should be treated as read-only properties
+
+        /** The URL as resolved by the constructor. This is always an absolute URL. Read only. */
+        this.url = url;
+
+        /** The number of attempted reconnects since starting, or the last successful connection. Read only. */
+        this.reconnectAttempts = 0;
+
+        /**
+         * The current state of the connection.
+         * Can be one of: WebSocket.CONNECTING, WebSocket.OPEN, WebSocket.CLOSING, WebSocket.CLOSED
+         * Read only.
+         */
+        this.readyState = WebSocket.CONNECTING;
+
+        /**
+         * A string indicating the name of the sub-protocol the server selected; this will be one of
+         * the strings specified in the protocols parameter when creating the WebSocket object.
+         * Read only.
+         */
+        this.protocol = null;
+
+        // Private state variables
+
+        var self = this;
+        var ws;
+        var forcedClose = false;
+        var timedOut = false;
+        var eventTarget = document.createElement('div');
+
+        // Wire up "on*" properties as event handlers
+
+        eventTarget.addEventListener('open',       function(event) { self.onopen(event); });
+        eventTarget.addEventListener('close',      function(event) { self.onclose(event); });
+        eventTarget.addEventListener('connecting', function(event) { self.onconnecting(event); });
+        eventTarget.addEventListener('message',    function(event) { self.onmessage(event); });
+        eventTarget.addEventListener('error',      function(event) { self.onerror(event); });
+
+        // Expose the API required by EventTarget
+
+        this.addEventListener = eventTarget.addEventListener.bind(eventTarget);
+        this.removeEventListener = eventTarget.removeEventListener.bind(eventTarget);
+        this.dispatchEvent = eventTarget.dispatchEvent.bind(eventTarget);
+
+        /**
+         * This function generates an event that is compatible with standard
+         * compliant browsers and IE9 - IE11
+         *
+         * This will prevent the error:
+         * Object doesn't support this action
+         *
+         * http://stackoverflow.com/questions/19345392/why-arent-my-parameters-getting-passed-through-to-a-dispatched-event/19345563#19345563
+         * @param s String The name that the event should use
+         * @param args Object an optional object that the event will use
+         */
+        function generateEvent(s, args) {
+        	var evt = document.createEvent("CustomEvent");
+        	evt.initCustomEvent(s, false, false, args);
+        	return evt;
+        };
+
+        this.open = function (reconnectAttempt) {
+            ws = new WebSocket(self.url, protocols || []);
+
+            if (reconnectAttempt) {
+                if (this.maxReconnectAttempts && this.reconnectAttempts > this.maxReconnectAttempts) {
+                    return;
+                }
+            } else {
+                eventTarget.dispatchEvent(generateEvent('connecting'));
+                this.reconnectAttempts = 0;
+            }
+
+            if (self.debug || ReconnectingWebSocket.debugAll) {
+                console.debug('ReconnectingWebSocket', 'attempt-connect', self.url);
+            }
+
+            var localWs = ws;
+            var timeout = setTimeout(function() {
+                if (self.debug || ReconnectingWebSocket.debugAll) {
+                    console.debug('ReconnectingWebSocket', 'connection-timeout', self.url);
+                }
+                timedOut = true;
+                localWs.close();
+                timedOut = false;
+            }, self.timeoutInterval);
+
+            ws.onopen = function(event) {
+                clearTimeout(timeout);
+                if (self.debug || ReconnectingWebSocket.debugAll) {
+                    console.debug('ReconnectingWebSocket', 'onopen', self.url);
+                }
+                self.protocol = ws.protocol;
+                self.readyState = WebSocket.OPEN;
+                self.reconnectAttempts = 0;
+                var e = generateEvent('open');
+                e.isReconnect = reconnectAttempt;
+                reconnectAttempt = false;
+                eventTarget.dispatchEvent(e);
+            };
+
+            ws.onclose = function(event) {
+                clearTimeout(timeout);
+                ws = null;
+                if (forcedClose) {
+                    self.readyState = WebSocket.CLOSED;
+                    eventTarget.dispatchEvent(generateEvent('close'));
+                } else {
+                    self.readyState = WebSocket.CONNECTING;
+                    var e = generateEvent('connecting');
+                    e.code = event.code;
+                    e.reason = event.reason;
+                    e.wasClean = event.wasClean;
+                    eventTarget.dispatchEvent(e);
+                    if (!reconnectAttempt && !timedOut) {
+                        if (self.debug || ReconnectingWebSocket.debugAll) {
+                            console.debug('ReconnectingWebSocket', 'onclose', self.url);
+                        }
+                        eventTarget.dispatchEvent(generateEvent('close'));
+                    }
+
+                    var timeout = self.reconnectInterval * Math.pow(self.reconnectDecay, self.reconnectAttempts);
+                    setTimeout(function() {
+                        self.reconnectAttempts++;
+                        self.open(true);
+                    }, timeout > self.maxReconnectInterval ? self.maxReconnectInterval : timeout);
+                }
+            };
+            ws.onmessage = function(event) {
+                if (self.debug || ReconnectingWebSocket.debugAll) {
+                    console.debug('ReconnectingWebSocket', 'onmessage', self.url, event.data);
+                }
+                var e = generateEvent('message');
+                e.data = event.data;
+                eventTarget.dispatchEvent(e);
+            };
+            ws.onerror = function(event) {
+                if (self.debug || ReconnectingWebSocket.debugAll) {
+                    console.debug('ReconnectingWebSocket', 'onerror', self.url, event);
+                }
+                eventTarget.dispatchEvent(generateEvent('error'));
+            };
+        }
+
+        // Whether or not to create a websocket upon instantiation
+        if (this.automaticOpen == true) {
+            this.open(false);
+        }
+
+        /**
+         * Transmits data to the server over the WebSocket connection.
+         *
+         * @param data a text string, ArrayBuffer or Blob to send to the server.
+         */
+        this.send = function(data) {
+            if (ws) {
+                if (self.debug || ReconnectingWebSocket.debugAll) {
+                    console.debug('ReconnectingWebSocket', 'send', self.url, data);
+                }
+                return ws.send(data);
+            } else {
+                throw 'INVALID_STATE_ERR : Pausing to reconnect websocket';
+            }
+        };
+
+        /**
+         * Closes the WebSocket connection or connection attempt, if any.
+         * If the connection is already CLOSED, this method does nothing.
+         */
+        this.close = function(code, reason) {
+            // Default CLOSE_NORMAL code
+            if (typeof code == 'undefined') {
+                code = 1000;
+            }
+            forcedClose = true;
+            if (ws) {
+                ws.close(code, reason);
+            }
+        };
+
+        /**
+         * Additional public API method to refresh the connection if still open (close, re-open).
+         * For example, if the app suspects bad data / missed heart beats, it can try to refresh.
+         */
+        this.refresh = function() {
+            if (ws) {
+                ws.close();
+            }
+        };
+    }
+
+    /**
+     * An event listener to be called when the WebSocket connection's readyState changes to OPEN;
+     * this indicates that the connection is ready to send and receive data.
+     */
+    ReconnectingWebSocket.prototype.onopen = function(event) {};
+    /** An event listener to be called when the WebSocket connection's readyState changes to CLOSED. */
+    ReconnectingWebSocket.prototype.onclose = function(event) {};
+    /** An event listener to be called when a connection begins being attempted. */
+    ReconnectingWebSocket.prototype.onconnecting = function(event) {};
+    /** An event listener to be called when a message is received from the server. */
+    ReconnectingWebSocket.prototype.onmessage = function(event) {};
+    /** An event listener to be called when an error occurs. */
+    ReconnectingWebSocket.prototype.onerror = function(event) {};
+
+    /**
+     * Whether all instances of ReconnectingWebSocket should log debug messages.
+     * Setting this to true is the equivalent of setting all instances of ReconnectingWebSocket.debug to true.
+     */
+    ReconnectingWebSocket.debugAll = false;
+
+    ReconnectingWebSocket.CONNECTING = WebSocket.CONNECTING;
+    ReconnectingWebSocket.OPEN = WebSocket.OPEN;
+    ReconnectingWebSocket.CLOSING = WebSocket.CLOSING;
+    ReconnectingWebSocket.CLOSED = WebSocket.CLOSED;
+
+    return ReconnectingWebSocket;
+});
+
+},{}]},{},[3]);
