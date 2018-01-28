@@ -9,9 +9,17 @@ require('materialize-css');
 var IntroJS = require('intro.js');
 window.materializeIncluded = true;
 
+// Helper functions 
 function print(message){
     var currentDate = '[' + new Date().toUTCString() + '] ';
     console.log(currentDate+message)
+}
+
+function guidGenerator() {
+    var S4 = function() {
+       return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+    };
+    return (S4()+S4()+S4()+S4()+S4()+S4()+S4()+S4());
 }
 
 /*  simple implementation of a marker class strictly for storage */
@@ -149,6 +157,9 @@ function ImageAnnotator() {
     // holds the current data object
     // primarily used to access the data object's name
     this.data = {}; 
+
+    this.stateLoaded = false;
+    this.dataLoaded = false;
 };
 
 
@@ -179,17 +190,32 @@ ImageAnnotator.prototype.initialize = function (config) {
         task: window.task, 
         user: window.user, 
         experiment: window.experiment, 
-        condition: window.condition});
+        condition: window.condition,
+        configuration: config
+    }).then(
+            function(){
+
+            print("Initialization finished.");
+            that.postInitialize();
+
+        });
 
     /* override the receiving function for interface events */
     this.client.task_session.setListeners({
-        "receive": that.handleInterfaceUpdate
+        "save": that.handleInterfaceUpdateSave, // Specify handler for save events.
+        "delete": that.handleInterfaceUpdateDelete // Specify handler for delet events.
     });
 
+    // close the loading modal
+    this.modals['loading_modal'].modal('open'); 
+};
+
+ImageAnnotator.prototype.postInitialize = function(){
+    var that = this;
     // define an image w/ load events
     global.oImg = new Image(); //$('.subject');
     var Img = $(".subject");
-    oImg.onload = function () {
+    global.oImg.onload = function () {
         Img.removeAttr('style');
 
         /*  compute the thumbnail size */
@@ -211,11 +237,15 @@ ImageAnnotator.prototype.initialize = function (config) {
         /* show the map */
         $("#map").fadeIn();
 
-        // close the loading modal
-        that.modals['loading_modal'].modal('close'); 
+        that.dataLoaded = true;
 
-        // close the modal
-        that.modals['fetching_task_modal'].modal('close');
+        // close the loading modal
+        if(that.statedLoaded){
+            that.modals['loading_modal'].modal('close'); 
+
+            // close the modal
+            that.modals['fetching_task_modal'].modal('close');
+        }
 
         // load based off of whether they've seen the tutorial or not
         var seenTutorial = localStorage.getItem('crowdcurio-tau-seen-tutorial');
@@ -337,8 +367,36 @@ ImageAnnotator.prototype.initialize = function (config) {
                 that.states['required'] = { task: task, markers: {}, map: {x: 0, y: 0}};
                 that.client.setData(task['id']);
                 that.data = task;
-                oImg.src = task['url'];
+                global.oImg.src = task['url'];
                 $(".subject").attr('src', task['url']);
+
+                // handle collaboration
+                if(config['collaboration']){
+                    if(config['collaboration']['active']){
+                        that.client.listAll('annotation', {
+                            'data': task['id'],
+                            'experiment': window.experiment,
+                            'condition': window.condition,
+                            'task': window.task,
+                            'task_session': that.client.task_session.task_session
+                        }, function(state){
+                            print("State: ");
+                            console.log(state);
+                            that.loadState(state);
+                            that.stateLoaded = true;
+
+                            that.modals['loading_modal'].modal('close'); 
+                        });
+                    }
+                } else { // otherwise, hide the modals
+                    that.stateLoaded = true;
+
+                    if(that.dataLoaded){
+                        that.modals['loading_modal'].modal('close'); 
+                        that.modals['fetching_task_modal'].modal('close'); 
+                    }
+                }
+
 
                 /* get the available practice tasks for the user */
                 that.client.getNextTask('practice', function(task){
@@ -427,7 +485,7 @@ ImageAnnotator.prototype.initialize = function (config) {
                         that.states['required'] = { task: task, markers: {}, map: {x: 0, y: 0}};
                         that.client.setData(task['id']);
                         that.data = task;
-                        oImg.src = task['url'];
+                        global.oImg.src = task['url'];
                         $(".subject").attr('src', task['url']);
                         
                         // switch the mode back
@@ -444,7 +502,7 @@ ImageAnnotator.prototype.initialize = function (config) {
             var task = ms.router.simulateGetNextTask();
 
             if(task.length !== 0){
-                oImg.src = task['url'];
+                global.oImg.src = task['url'];
                 $(".subject").attr('src', task['url']);
                 this.artifact_id = task['id'];
             } else {
@@ -533,7 +591,7 @@ ImageAnnotator.prototype.initialize = function (config) {
             var task = ms.router.simulateGetNextTask();
 
             if(task.length !== 0){
-                oImg.src = task['url'];
+                global.oImg.src = task['url'];
                 $(".subject").attr('src', task['url']);
                 this.artifact_id = task['id'];
             } else {
@@ -561,10 +619,7 @@ ImageAnnotator.prototype.initialize = function (config) {
     } else {
         ms.changeMode("somethingelse"); 
     }
-
-    // close the loading modal
-    this.modals['loading_modal'].modal('open'); 
-};
+}
 
 
 /**
@@ -596,9 +651,9 @@ ImageAnnotator.prototype.attachHandlers = function() {
     // Keydown
     $('*').on("keydown", function(e) {
         /*  prevent the default backspace function */
-        /*if(e.which == 8){
+        if(e.which == 8){
             e.preventDefault();
-        }*/
+        }
 
         if (surface.intercepting) {
             surface.intercepting = false;
@@ -606,9 +661,9 @@ ImageAnnotator.prototype.attachHandlers = function() {
             var modkey = (e.ctrlKey || e.altKey || e.metaKey);
 
             /*  prevent the default backspace function */
-            /*if(e.which == 8){
+            if(e.which == 8){
                 surface.deleteTool();
-            }*/
+            }
 
             if (e.shiftKey) {
                 surface.shifting = true;
@@ -676,7 +731,7 @@ ImageAnnotator.prototype.attachHandlers = function() {
                 }else {
                     $('.delete-marker-btn').hide();
                     if(move_count == 0) {
-                        delete_button.show();
+                        //delete_button.show();
                     }
                     dragged = false;
                 }
@@ -688,13 +743,13 @@ ImageAnnotator.prototype.attachHandlers = function() {
                 }else {
                     $('.delete-marker-btn').hide();
                     if(move_count == 0) {
-                        delete_button.show();
+                        //delete_button.show();
                     }
                     dragged = false;
                 }
             }
             e.stopImmediatePropagation();
-            if(move_count == 0){
+            if(move_count == 0 && that.mode === 'counting'){
                 ms.deleteTool(e);
             }
         });
@@ -1364,7 +1419,19 @@ ImageAnnotator.prototype.addTool = function(event) {
 
             /*  add the marker to the storage unit */
             surface.markers[surface.selection] = new Marker(x.toPrecision(3)/zoom, y.toPrecision(3)/zoom, label, rotation);
-            this.sendInterfaceUpdate({'create': 'test'});
+            //this.sendInterfaceUpdate({'create': 'test'});
+
+            // create the annotation in the system
+            this.client.create('annotation', {
+                label: surface.markers[surface.selection].label,
+                position: {
+                    'x': surface.markers[surface.selection].x,
+                    'y': surface.markers[surface.selection].y
+                }
+            }, function(annotation){
+                 // set the id of the annotation html element
+                $('#m-' + surface.selection).attr('annotation-id', annotation.id);    
+            });
         }
     } else if(surface.mode == "counting") {
         if (((new Date().getTime()) - surface.timeOfLastDrag) > 100 && !surface.hoveringOnMarker) {
@@ -1451,25 +1518,34 @@ ImageAnnotator.prototype.addTool = function(event) {
 
 ImageAnnotator.prototype.deleteTool = function(e) {
     // return if this is the help-giving annotation
-    if(e.target.id === 'help-giving-target') return;
-
+    //if(e.target.id === 'help-giving-target') return;
+    var that = this;
     /* decrement the counter */
-    var classList = $(e.currentTarget).attr('class');
-    var className = classList.match(/\S*marker-n\d\S*/);
-    if(className === null){
-        return;
+    if(this.mode==='counting'){
+        var classList = $(e.currentTarget).attr('class');
+        var className = classList.match(/\S*marker-n\d\S*/);
+        if(className === null){
+            return;
+        }
+
+        className = className[0];
+        console.log(parseInt($("label[lval='"+className+"'] div")[0].innerHTML));
+        $("label[lval='"+className+"'] div")[0].innerHTML = parseInt($("label[lval='"+className+"'] div")[0].innerHTML) - 1;
     }
-
-    className = className[0];
-    console.log(parseInt($("label[lval='"+className+"'] div")[0].innerHTML));
-    $("label[lval='"+className+"'] div")[0].innerHTML = parseInt($("label[lval='"+className+"'] div")[0].innerHTML) - 1;
-
     $('#markers .selected').each(function (i, m) {
         var mid = $(this).attr('id').replace('m-', '');
 
         /*  remove the marker in storage and from the view */
         delete surface.markers[mid];
+        var annotation_id = $("#m-" + mid).attr('annotation-id');
         $('#m-' + mid).remove();
+
+        // delete the annotation in the system
+        that.client.delete('annotation', {
+            id: annotation_id
+        }, function(annotation){
+            //print("Annotation ("+annotation_id+") deleted successfully.");
+        });
 
     });
 
@@ -1488,12 +1564,20 @@ ImageAnnotator.prototype.deleteToolWithButton = function(ele) {
 
     /*  remove the marker in storage and from the view */
     delete surface.markers[mid];
+    var annotation_id = $("#m-" + mid).attr('annotation-id');
     $('#m-' + mid).remove();
 
     /*  select the next marker, if there are any */
     if ($('.marker').size() > 0) {
         surface.select_next();
     }
+
+    // delete the annotation in the system
+    this.client.delete('annotation', {
+        id: annotation_id
+    }, function(annotation){
+        //print("Annotation ("+annotation_id+") deleted successfully.");
+    });
 
     surface.hoveringOnMarker = false;
 };
@@ -1559,6 +1643,21 @@ ImageAnnotator.prototype.setToolValue = function(event){
         //console.log("Attempting to add: &#"+character.charCodeAt(0)+";");
         $(item).html("&#"+character.charCodeAt(0)+";");
         surface.markers[surface.selection].updateLetter(character);
+    }
+
+    var annotation_id = $('#m-'+surface.selection).attr('annotation-id');
+    // delete the annotation in the system
+    this.client.update('annotation', {
+        id: annotation_id,
+        label: character
+    }, function(annotation){
+        // set the id of the annotation html element
+        //print("Annotation's character ("+annotation_id+") updated successfully.");
+    });
+
+    if($('#m-'+surface.selection).hasClass('hovering')){
+        $(item).css('font-size', '36px');
+        $(item).css('top', '20px');
     }
 
     $('#markers .selected').each(function(i, m) {
@@ -1670,6 +1769,17 @@ ImageAnnotator.prototype.dropTool = function(event){
     /* update the marker */
     console.log(event.target.id.split('-')[1]);
     surface.markers[event.target.id.split('-')[1]].updatePoint(x.toPrecision(3)/zoom, y.toPrecision(3)/zoom, surface.rotationDegree);
+    var annotation_id = $('#m-'+event.target.id.split('-')[1]).attr('annotation-id');
+    // delete the annotation in the system
+    this.client.update('annotation', {
+        id: annotation_id,
+        position: {
+            'x': x.toPrecision(3)/zoom,
+            'y': y.toPrecision(3)/zoom
+        }
+    }, function(annotation){
+        //print("Annotation's postion ("+annotation_id+") updated successfully.");
+    });
     //console.log(surface.markers);
 //    console.log('from:                     angle: ' + surface.rotationDegree);
 //    console.log('x: ' + x + " y: " + y);
@@ -1682,8 +1792,12 @@ ImageAnnotator.prototype.dropTool = function(event){
 };
 
 ImageAnnotator.prototype.hoverToolOn = function(e){
+    if(surface.movingMarker){
+        return;
+    }
+
     this.hoveringOnMarker = true;
-    var ele = $(e.target);
+    var ele = $(e.currentTarget);
     ele.addClass('hovering');
     var marker = this.markers[ele.attr('id').split('-')[1]];
     var zoom = parseFloat($("#zoom").val());
@@ -1701,6 +1815,8 @@ ImageAnnotator.prototype.hoverToolOn = function(e){
     }
     ele.animate({'top': (zoom*(parseInt(marker.y)-(30*scaler)))+'px', 'left': (zoom*(parseInt(marker.x)-(30*scaler)))+'px', 'height': '60px', 'width': '60px', 'border-radius': '100px'}, 50);
 
+    $("#"+e.currentTarget.id+" > .character").css("opacity", 0.0);
+
     /*  forcefully turn on draggability of the fragment image */
     $("#fragment_container").draggable("option", "disabled", true);
 
@@ -1712,8 +1828,11 @@ ImageAnnotator.prototype.hoverToolOn = function(e){
 };
 
 ImageAnnotator.prototype.hoverToolOff = function(e){
+    if(surface.movingMarker){
+        return;
+    }
     this.hoveringOnMarker = false;
-    var ele = $(e.target);
+    var ele = $(e.currentTarget);
     ele.removeClass('hovering');
     var marker = this.markers[ele.attr('id').split('-')[1]];
     var markerSize = parseInt($("#m_size").val(), 10);
@@ -1731,6 +1850,12 @@ ImageAnnotator.prototype.hoverToolOff = function(e){
         scaler = 1.0;
     }
     ele.animate({'top': (zoom*(parseInt(marker.y)-(10*scaler)))+'px', 'left': (zoom*(parseInt(marker.x)-(10*scaler)))+'px', 'height': '20px', 'width': '20px'}, 50);
+
+    var character = $("#"+e.currentTarget.id+" > .character");
+    character.css("opacity", 1.0);
+    character.css('font-size', '12px');
+    character.css('top', '0px');
+
 
     /*  forcefully turn off draggability of the fragment image */
     $("#fragment_container").draggable("option", "disabled", false);
@@ -2836,6 +2961,33 @@ ImageAnnotator.prototype.togglePractice = function(e){
      Img.attr('src', task['url']);
 };
 
+ImageAnnotator.prototype.loadState = function(state){
+    var that = this;
+    for(var idx in state){
+        if (state[idx].hasOwnProperty('position')) {
+            var marker = state[idx];
+            var key = guidGenerator();
+            var newMarker;
+            if(marker.label === ""){
+                newMarker = "<div annotation-id='"+marker['id']+"' class='marker new unfinished' id='m-" + key + "' style='left: " + (marker['position']['x']-10) + "px;top:" + (marker['position']['y']-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker['label']+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+            } else {
+                newMarker = "<div annotation-id='"+marker['id']+"' class='marker new' id='m-" + key + "' style='left: " + (marker['position']['x']-10) + "px;top:" + (marker['position']['y']-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker['label']+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+            }
+            $('#markers').append(newMarker);
+            $('#m-'+key).draggable({
+                start: function(e){
+                    ms.dragTool(e);$('.delete-marker-btn').hide();
+                },
+                stop: function(e){
+                    ms.dropTool(e);$('.delete-marker-btn').hide();
+            }});
+            $('#m-' + key).on('mouseenter', function(e){ms.hoverToolOn(e);});
+            $('#m-' + key).on('mouseleave', function(e){ms.hoverToolOff(e);});
+            surface.markers[key] = new Marker(marker['position']['x'],marker['position']['y'], marker["label"]);
+        }
+    }
+}
+
 ImageAnnotator.prototype.loadMarkers = function(markers){
     // set local vars
     var marker_nums = {};
@@ -3161,14 +3313,74 @@ ImageAnnotator.prototype.countMarkers = function() {
     return Object.size(surface.markers);
 };
 
-/* Fucntions for real-time updates */
-ImageAnnotator.prototype.sendInterfaceUpdate = function(event){
-    this.client.task_session.send(event);
+/**
+ * Handles SAVE events made on annotations.
+ * @param {*} event : broadcasted event from the Collaboration app. 
+ */
+ImageAnnotator.prototype.handleInterfaceUpdateSave = function(event){
+
+    var marker = event.payload.annotation;
+    var annotation_element = $('div[annotation-id="'+marker.id+'"]');
+    
+    // if *this* user is the person who made the save event trigger, ignore it.
+    if(parseInt(marker.updated_by) === parseInt(window.user)){
+        return;
+    }
+
+    // Does the annotation exist already?
+    if(annotation_element.length){ // Case 1: The annotation exists, so update it.
+        annotation_element.css('left', (marker['position']['x']-10)+'px');
+        annotation_element.css('top', (marker['position']['y']-10)+'px');
+
+        if(marker.label !== ""){
+            annotation_element.removeClass('unfinished');
+            $('div[annotation-id="'+marker.id+'"] > .character').html(marker.label);
+        }
+
+        var key = annotation_element.attr('id').split('-')[1];
+        surface.markers[key] = new Marker(marker['position']['x'],marker['position']['y'], marker["label"]);
+
+    } else { // Case 2: The annotation doesn't exist on the screen, so we need to create it.
+        var key = guidGenerator();
+        var newMarker;
+        if(marker.label === ""){
+            newMarker = "<div annotation-id='"+marker['id']+"' class='marker new unfinished' id='m-" + key + "' style='left: " + (marker['position']['x']-10) + "px;top:" + (marker['position']['y']-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker['label']+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+        } else {
+            newMarker = "<div annotation-id='"+marker['id']+"' class='marker new' id='m-" + key + "' style='left: " + (marker['position']['x']-10) + "px;top:" + (marker['position']['y']-10) + "px;background:" + $('#m_colour').val() + ";opacity:" + $('#m_opacity').val() + "'><div class='character'>"+marker['label']+"</div><div id='delete-marker-"+key+"' class='delete-marker-btn' style='display:none;'>Delete</div></div>";
+        }
+        $('#markers').append(newMarker);
+        $('#m-'+key).draggable({
+            start: function(e){
+                ms.dragTool(e);$('.delete-marker-btn').hide();
+            },
+            stop: function(e){
+                ms.dropTool(e);$('.delete-marker-btn').hide();
+        }});
+        $('#m-' + key).on('mouseenter', function(e){ms.hoverToolOn(e);});
+        $('#m-' + key).on('mouseleave', function(e){ms.hoverToolOff(e);});
+        surface.markers[key] = new Marker(marker['position']['x'],marker['position']['y'], marker["label"]);
+    }
+
+    // Show the update on the mini map
+    var map_marker_id = "map-marker-"+guidGenerator();
+    var thumb_element = $("#thumb");
+    var map_coordinate_x = (marker['position']['x']/global.oImg.naturalWidth)*thumb_element.width();
+    var map_coordinate_y = (marker['position']['y']/global.oImg.naturalHeight)*thumb_element.height();
+    var map_marker = '<div id='+map_marker_id+' class="map-marker" style="left:'+(map_coordinate_x+3)+'px;top:'+(map_coordinate_y+3)+'px;"></div>';
+    $("#map").append(map_marker);
+    var marker_element = $("#"+map_marker_id);
+    marker_element.fadeOut(8000, function(){
+        marker_element.remove();
+    }); // fade the marker out after 8 seconds and then remove it.
 };
 
-ImageAnnotator.prototype.handleInterfaceUpdate = function(event){
-    print("This should update the interface based on the received message: ");
-    console.log(event);
+/**
+ * Handles DELETE events made on annotations.
+ * @param {*Object} event : broadcasted event from the Collaboration app. 
+ */
+ImageAnnotator.prototype.handleInterfaceUpdateDelete = function(event){
+    var annotation_id = event.payload.annotation.id;
+    $('div[annotation-id="'+annotation_id+'"').remove();
 };
 
 
@@ -3423,6 +3635,7 @@ global.DEV = false;
 global.task = window.task || -1;
 global.user = window.user || -1;
 global.experiment = window.experiment || -1;
+global.condition = window.condition || -1;
 var config = window.config || {
         'mode': 'transcription',
     };
@@ -3456,52 +3669,53 @@ function CrowdCurioClient(){
 }
 
 CrowdCurioClient.prototype.init = function(params){
-    // authenticate & instantiate the client's connection
-    this.auth = new coreapi.auth.SessionAuthentication({
-        csrfCookieName: 'csrftoken',
-        csrfHeaderName: 'X-CSRFToken'
-    })
-    this.client = new coreapi.Client({auth: this.auth})
+    var that = this;
+    return new Promise(function(resolve, reject) {
+        // authenticate & instantiate the client's connection
+        that.auth = new coreapi.auth.SessionAuthentication({
+            csrfCookieName: 'csrftoken',
+            csrfHeaderName: 'X-CSRFToken'
+        })
+        that.client = new coreapi.Client({auth: that.auth})
 
-    // create the task routing manager
-    this.router = new TaskRoutingManager();
+        // create the task routing manager
+        that.router = new TaskRoutingManager();
 
-    // set (1) task and (2) experiment vars for routing
-    this.user = {id: params['user'], type: 'User'};
-    this.task = {id: params['task'], type: 'Task'};
-    if(params['experiment'] !== undefined && params['experiment'] > 0){
-        this.experiment = {id: params['experiment'], type: 'Experiment'}
+        // set (1) task and (2) experiment vars for routing
+        that.user = {id: params['user'], type: 'User'};
+        that.task = {id: params['task'], type: 'Task'};
+        if(params['experiment'] !== undefined && params['experiment'] > 0){
+            that.experiment = {id: params['experiment'], type: 'Experiment'}
+            that.condition = {id: params['condition'], type: 'Condition'}
 
-        this.router.init(this.client, {
-            'page_size': 3,
-            'task': params['task'],
-            'experiment': params['experiment'],
-            'condition': params['condition']
-        });
+            that.router.init(that.client, {
+                'page_size': 3,
+                'task': params['task'],
+                'experiment': params['experiment'],
+                'condition': params['condition']
+            });
 
-    } else {
-        this.experiment = null;
-        
-        this.router.init(this.client, {
-            'page_size': 3,
-            'task': params['task']
-        });
-    }
-
-    /* artificially set things up */
-    config['collaboration'] = {
-        'active' : true,
-        'policy': {
+        } else {
+            that.experiment = null;
+            
+            that.router.init(that.client, {
+                'page_size': 3,
+                'task': params['task']
+            });
         }
-    };
 
-    // if collaboration is active, create and initialize a task session
-    if(config['collaboration']){
-        if(config['collaboration']['active']){
-            this.task_session = new TaskSession();
-            this.task_session.init(jQuery.extend({ 'client': this.client}, params));
+        // if collaboration is active, create and initialize a task session and wait to resolve the promise until the task session has been initialized
+        if(params['configuration']['collaboration']){
+            if(params['configuration']['collaboration']['active']){
+                that.task_session = new TaskSession();
+                that.task_session.init(jQuery.extend({ 'client': that.client}, params)).then(function(){
+                    resolve();
+                });
+            }
+        } else {
+            resolve();
         }
-    }
+    }.bind(this));
 }
 
 CrowdCurioClient.prototype.setData = function(id){
@@ -3545,6 +3759,16 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
             experiment: that.experiment,
             condition: that.condition
         }, params);
+    } else if (model == 'annotation'){
+        params = jQuery.extend({
+            owner: that.user,
+            data: that.data,
+            task: that.task,
+            experiment: that.experiment,
+            condition: that.condition,
+            task_session: {id: that.task_session.task_session, type: 'TaskSession'},
+            updated_by: that.user
+        }, params);
     }
 
     let action = [model, "create"];
@@ -3554,6 +3778,13 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
 }
 
 CrowdCurioClient.prototype.update = function(model, params, callback){
+    var that = this;
+    if (model == 'annotation'){
+        params = jQuery.extend({
+            updated_by: that.user
+        }, params);
+    }
+
     let action = [model, "update"];
     this.client.action(schema, action, params).then(function(result) {
         callback(result);
@@ -3755,7 +3986,8 @@ function TaskSession(){
     this.socket = null;
 
     // ui action bindings
-    this.handleInterfaceAction = null;
+    this.handleInterfaceActionSave = null;
+    this.handleInterfaceActionDelete = null;
 }
 
 /**
@@ -3764,47 +3996,54 @@ function TaskSession(){
  * @param {Object} params 
  */
 TaskSession.prototype.init = function(params) {
-    // This function should initialize the TaskSession.
     var that = this;
-    print('Initializing session.');
+    return new Promise(function(resolve, reject) {
+        print('Initializing session.');
 
-    // authenticate & instantiate the client's connection
-    this.client = params['client']
+        // authenticate & instantiate the client's connection
+        that.client = params['client']
 
-    // set (1) task and (2) experiment vars
-    this.user = {id: params['user'], type: 'User'};
-    this.task = {id: params['task'], type: 'Task'};
-    if(params['experiment']){
-        this.experiment = {id: params['experiment'], type: 'Experiment'}
-    } else {
-        this.experiment = null;
-    }
-    if(params['condition']){
-        this.condition = {id: params['condition'], type: 'Condition'}
-    } else {
-        this.condition = null;
-    }
-
-    // set a default handler for receiving ui events
-    this.handleInterfaceAction = function(event){
-        print("ERROR: Can't handle transmitted interface event. (E: "+event+" )");
-    }
-
-    // fetch the task policy
-    this.fetchPolicy().then(function(policy){
-        if(policy !== null){
-            that.task_session_policy = policy;
-
-            // find the task session id for the user
-            that.find().then(function(id){
-                print("Session Retrieved: "+id);
-                that.task_session = id;
-                that.connect(that.task_session);
-            });
+        // set (1) task and (2) experiment vars
+        that.user = {id: params['user'], type: 'User'};
+        that.task = {id: params['task'], type: 'Task'};
+        if(params['experiment']){
+            that.experiment = {id: params['experiment'], type: 'Experiment'}
         } else {
-            print("ERROR: Can't find an associated policy.")
+            that.experiment = null;
         }
-    });
+        if(params['condition']){
+            that.condition = {id: params['condition'], type: 'Condition'}
+        } else {
+            that.condition = null;
+        }
+
+        // set a default handler for receiving ui events
+        that.handleInterfaceActionSave = function(event){
+            print("ERROR: Can't handle transmitted Interface Save event. (E: "+event+" )");
+        }
+        that.handleInterfaceActionDelete = function(event){
+            print("ERROR: Can't handle transmitted Inteface Delete event. (E: "+event+" )");
+        }
+
+        // fetch the task policy
+        that.fetchPolicy().then(function(policy){
+            if(policy !== null){
+                that.task_session_policy = policy;
+
+                // find the task session id for the user
+                that.find().then(function(id){
+                    print("Session Retrieved: "+id);
+                    that.task_session = id;
+                    that.connect(that.task_session);
+                    
+                    // resolve after we have the connection
+                    resolve();
+                });
+            } else {
+                print("ERROR: Can't find an associated policy.")
+            }
+        });
+    }.bind());
 }
 
 /**
@@ -3819,11 +4058,11 @@ TaskSession.prototype.init = function(params) {
  * @param {Object} obj 
  */
 TaskSession.prototype.setListeners = function(obj){
-    if('send' in obj && typeof obj['send'] === "function"){
-        this.send = obj['send'];
+    if('save' in obj && typeof obj['save'] === "function"){
+        this.handleInterfaceActionSave = obj['save'];
     }
-    if('receive' in obj && typeof obj['receive'] === "function"){
-        this.handleInterfaceAction = obj['receive'];
+    if('delete' in obj && typeof obj['delete'] === "function"){
+        this.handleInterfaceActionDelete = obj['delete'];
     }
 };
 
@@ -4055,7 +4294,7 @@ TaskSession.prototype.connect = function(roomId){
 
     that.socket.onmessage = function (message) {
         // Decode the JSON
-        print("Got websocket message " + message.data);
+        print(":RCVD: " + message.data);
         var data = JSON.parse(message.data);
         // Handle errors
         if (data.error) {
@@ -4215,7 +4454,11 @@ TaskSession.prototype.connect = function(roomId){
                     updateUserList();
                     return;
                 case 9:
-                    that.handleInterfaceAction(data);
+                    that.handleInterfaceActionSave(data);
+                    break;
+                case 10:
+                    that.handleInterfaceActionDelete(data);
+                    break;
                 default:
                     print("Unsupported message type!");
                     return;
@@ -4251,6 +4494,26 @@ TaskSession.prototype.fetch = function(model, params, callback){
     let action = ["message", "list"];
     this.client.action(schema, action, params).then(function(resp) {
         callback(resp);
+    });
+}
+
+/**
+ * A general-purpose function for loading state from the server.
+ * @param {*} model 
+ * @param {*} callback 
+ */
+TaskSession.prototype.loadState = function(callback){
+    var that = this;
+    var params = {
+        data: that.client.data.id,
+        task: that.task.id,
+        experiment: that.experiment.id,
+        condition: that.condition.id
+    };
+
+    let action = ["annotation", "list"];
+    this.client.action(schema, action, params).then(function(resp) {
+        callback(resp.results);
     });
 }
 
