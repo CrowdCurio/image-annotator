@@ -385,6 +385,15 @@ ImageAnnotator.prototype.postInitialize = function(){
                             that.loadState(state);
                             that.stateLoaded = true;
 
+                            // update the state of the task session
+                            that.client.update('tasksession', {
+                                id: that.client.task_session.task_session,
+                                channel_name: that.client.task_session.channel_name,
+                                data: { type: 'Data', id: task['id']}
+                            }, function(){
+                                //print("Task session updated.")
+                            })
+
                             that.modals['loading_modal'].modal('close'); 
                         });
                     }
@@ -487,6 +496,18 @@ ImageAnnotator.prototype.postInitialize = function(){
                         that.data = task;
                         global.oImg.src = task['url'];
                         $(".subject").attr('src', task['url']);
+
+                        // update the state of the task session
+                        that.client.update('tasksession', {
+                            id: that.client.task_session.task_session,
+                            channel_name: that.client.task_session.channel_name,
+                            data: { type: 'Data', id: task['id']}
+                        }, function(){
+                            //print("Task session updated.")
+                        })
+
+                        // close the modal
+                        that.modals['fetching_task_modal'].modal('close');
                         
                         // switch the mode back
                         ms.changeMode(config['mode']);
@@ -1201,6 +1222,7 @@ ImageAnnotator.prototype.resetSurface = function(){
 
     /* exterminate the stored and rendered markers */
     $(".marker").remove();
+    $(".map-marker").remove();
     surface.markers = {};
 
     /* reset the label counters */
@@ -2951,6 +2973,7 @@ ImageAnnotator.prototype.togglePractice = function(e){
 
     // delete the markers 
     $('.marker').remove();
+    $('.map-marker').remove();
     this.markers = {};
 
      // update the image 
@@ -3369,9 +3392,13 @@ ImageAnnotator.prototype.handleInterfaceUpdateSave = function(event){
     var map_marker = '<div id='+map_marker_id+' class="map-marker" style="left:'+(map_coordinate_x+3)+'px;top:'+(map_coordinate_y+3)+'px;"></div>';
     $("#map").append(map_marker);
     var marker_element = $("#"+map_marker_id);
-    marker_element.fadeOut(8000, function(){
-        marker_element.remove();
+    marker_element.animate({opacity: 0.5}, 8000, function(){
+        //marker_element.remove();
     }); // fade the marker out after 8 seconds and then remove it.
+    
+
+    // add a toast
+    Materialize.toast('Tate created an annotation.', 3000, 'rounded')
 };
 
 /**
@@ -4024,6 +4051,9 @@ TaskSession.prototype.init = function(params) {
         that.handleInterfaceActionDelete = function(event){
             print("ERROR: Can't handle transmitted Inteface Delete event. (E: "+event+" )");
         }
+        that.handleInterfaceActionTaskSwitch = function(event){
+            print("ERROR: Can't handle transmitted Interface TaskSwitch event. (E: "+event+" )");
+        }
 
         // fetch the task policy
         that.fetchPolicy().then(function(policy){
@@ -4058,11 +4088,14 @@ TaskSession.prototype.init = function(params) {
  * @param {Object} obj 
  */
 TaskSession.prototype.setListeners = function(obj){
-    if('save' in obj && typeof obj['save'] === "function"){
+    if('save' in obj && typeof obj['save'] === "function"){ // Annotation Save events
         this.handleInterfaceActionSave = obj['save'];
     }
-    if('delete' in obj && typeof obj['delete'] === "function"){
+    if('delete' in obj && typeof obj['delete'] === "function"){ // Annotation Delete events
         this.handleInterfaceActionDelete = obj['delete'];
+    }
+    if('task-switch' in obj && typeof obj['task-switch'] === "function"){ // TaskSession Save events, specififcally for updating Data reference
+        this.handleInterfaceActionTaskSwitch = obj['task-switch'];
     }
 };
 
@@ -4250,16 +4283,16 @@ TaskSession.prototype.connect = function(roomId){
                 var navbar_username = $("#user-logged-in a").text();
                 var direction = 'in';
                 if(navbar_username === message.handle){
-                    direction = 'out';
+                    direction = 'out no-avatar';
                 }
                 var message_time = message.created;
 
                 // Message
-                ok_msg = '<div class="message '+direction+' no-avatar">\
+                ok_msg = '<div class="message '+direction+'">\
                         <!-- BEGIN MESSAGE SENDER INFO -->\
                         <div class="sender">\
-                            <a href="javascript:void(0);" title="Rufat Askerov">\
-                                <img src="assets/img/avatar.png" class="avatar" alt="Rufat Askerov">\
+                            <a href="javascript:void(0);" >\
+                                <div class="avatar">'+message.handle[0]+'</div>\
                             </a>\
                         </div>\
                         <!-- END MESSAGE SENDER INFO -->\
@@ -4410,11 +4443,11 @@ TaskSession.prototype.connect = function(roomId){
                                     + currentdate.getSeconds();
 
                     // Message
-                    ok_msg = '<div class="message '+direction+' no-avatar">\
+                    ok_msg = '<div class="message '+direction+'">\
                             <!-- BEGIN MESSAGE SENDER INFO -->\
                             <div class="sender">\
                                 <a href="javascript:void(0);" title="Rufat Askerov">\
-                                    <img class="avatar" alt="Rufat Askerov">\
+                                    <div class="avatar">'+data.payload.username[0]+'</div>\
                                 </a>\
                             </div>\
                             <!-- END MESSAGE SENDER INFO -->\
@@ -4459,6 +4492,9 @@ TaskSession.prototype.connect = function(roomId){
                 case 10:
                     that.handleInterfaceActionDelete(data);
                     break;
+                case 11:
+                    that.handleInterfaceActionTaskSwitch(data);
+                    break;    
                 default:
                     print("Unsupported message type!");
                     return;
