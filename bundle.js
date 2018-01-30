@@ -4430,7 +4430,7 @@ TaskSession.prototype.connect = function(roomId){
                     var navbar_username = $("#user-logged-in a").text();
                     var direction = 'in';
                     if(navbar_username === data.payload.username){
-                        direction = 'out';
+                        direction = 'out no-avatar';
                     }
 
                     // calculate time
