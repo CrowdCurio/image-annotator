@@ -447,7 +447,7 @@
     position: absolute;
     left: 260px;
     width: 221px;
-    z-index: 9999;
+    z-index: 999;
     top: 0px;
 }
 
@@ -1478,4 +1478,29 @@ span.thumb {
 
 #validation-example-red {
   color: red;
+}
+
+#carousel-container {
+  height: 100% !important;
+  border-radius: 10px;
+  border: 1px solid black;
+}
+
+.tutorial-hr {
+  width: 80%;
+  color: lightgray;
+}
+
+.tutorial-img {
+  height: 300px;
+}
+
+.tutorial-btn-next {
+  background-color: orange;
+  margin-left: 10px;
+}
+
+.tutorial-btn-prev {
+  background-color: grey;
+  margin-right: 10px;
 }
