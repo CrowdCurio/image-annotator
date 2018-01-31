@@ -1755,7 +1755,7 @@ ImageAnnotator.prototype.setToolValue = function(event){
             });
         } else {
             setTimeout(function(){
-                saveLoop(id, character);
+                loopUntilUpdated(id, character);
             }, 1000);
         }
     }
