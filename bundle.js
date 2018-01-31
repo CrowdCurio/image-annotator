@@ -519,14 +519,18 @@ ImageAnnotator.prototype.postInitialize = function(){
                         global.oImg.src = task['url'];
                         $(".subject").attr('src', task['url']);
 
-                        // update the state of the task session
-                        that.client.update('tasksession', {
-                            id: that.client.task_session.task_session,
-                            channel_name: that.client.task_session.channel_name,
-                            data: { type: 'Data', id: task['id']}
-                        }, function(){
-                            //print("Task session updated.")
-                        })
+                        if(config['collaboration']){
+                            if(config['collaboration']['active']){
+                                // update the state of the task session
+                                that.client.update('tasksession', {
+                                    id: that.client.task_session.task_session,
+                                    channel_name: that.client.task_session.channel_name,
+                                    data: { type: 'Data', id: task['id']}
+                                }, function(){
+                                    //print("Task session updated.")
+                                })
+                            }
+                        }
 
                         // close the modal
                         that.modals['fetching_task_modal'].modal('close');
