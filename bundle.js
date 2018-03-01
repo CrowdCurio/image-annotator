@@ -3876,27 +3876,15 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
             condition: that.condition
         }, params);
     } else if (model == 'annotation'){
-        if(that.task_session){
-            params = jQuery.extend({
-                owner: that.user,
-                data: that.data,
-                task: that.task,
-                experiment: that.experiment,
-                condition: that.condition,
-                task_session: {id: that.task_session.task_session, type: 'TaskSession'},
-                updated_by: that.user
-            }, params);
-        } else {
-            params = jQuery.extend({
-                owner: that.user,
-                data: that.data,
-                task: that.task,
-                experiment: that.experiment,
-                condition: that.condition,
-                task_session: null,
-                updated_by: that.user
-            }, params);
-        }
+        params = jQuery.extend({
+            owner: that.user,
+            data: that.data,
+            task: that.task,
+            experiment: that.experiment,
+            condition: that.condition,
+            task_session: {id: that.task_session.task_session, type: 'TaskSession'},
+            updated_by: that.user
+        }, params);
     }
 
     let action = [model, "create"];
@@ -4152,9 +4140,6 @@ TaskSession.prototype.init = function(params) {
         that.handleInterfaceActionDelete = function(event){
             print("ERROR: Can't handle transmitted Inteface Delete event. (E: "+event+" )");
         }
-        that.handleInterfaceActionTaskSwitch = function(event){
-            print("ERROR: Can't handle transmitted Interface TaskSwitch event. (E: "+event+" )");
-        }
 
         // fetch the task policy
         that.fetchPolicy().then(function(policy){
@@ -4189,14 +4174,11 @@ TaskSession.prototype.init = function(params) {
  * @param {Object} obj 
  */
 TaskSession.prototype.setListeners = function(obj){
-    if('save' in obj && typeof obj['save'] === "function"){ // Annotation Save events
+    if('save' in obj && typeof obj['save'] === "function"){
         this.handleInterfaceActionSave = obj['save'];
     }
-    if('delete' in obj && typeof obj['delete'] === "function"){ // Annotation Delete events
+    if('delete' in obj && typeof obj['delete'] === "function"){
         this.handleInterfaceActionDelete = obj['delete'];
-    }
-    if('task-switch' in obj && typeof obj['task-switch'] === "function"){ // TaskSession Save events, specififcally for updating Data reference
-        this.handleInterfaceActionTaskSwitch = obj['task-switch'];
     }
 };
 
@@ -4384,16 +4366,16 @@ TaskSession.prototype.connect = function(roomId){
                 var navbar_username = $("#user-logged-in a").text();
                 var direction = 'in';
                 if(navbar_username === message.handle){
-                    direction = 'out no-avatar';
+                    direction = 'out';
                 }
                 var message_time = message.created;
 
                 // Message
-                ok_msg = '<div class="message '+direction+'">\
+                ok_msg = '<div class="message '+direction+' no-avatar">\
                         <!-- BEGIN MESSAGE SENDER INFO -->\
                         <div class="sender">\
-                            <a href="javascript:void(0);" >\
-                                <div class="avatar">'+message.handle[0]+'</div>\
+                            <a href="javascript:void(0);" title="Rufat Askerov">\
+                                <img src="assets/img/avatar.png" class="avatar" alt="Rufat Askerov">\
                             </a>\
                         </div>\
                         <!-- END MESSAGE SENDER INFO -->\
@@ -4531,7 +4513,7 @@ TaskSession.prototype.connect = function(roomId){
                     var navbar_username = $("#user-logged-in a").text();
                     var direction = 'in';
                     if(navbar_username === data.payload.username){
-                        direction = 'out no-avatar';
+                        direction = 'out';
                     }
 
                     // calculate time
@@ -4544,11 +4526,11 @@ TaskSession.prototype.connect = function(roomId){
                                     + currentdate.getSeconds();
 
                     // Message
-                    ok_msg = '<div class="message '+direction+'">\
+                    ok_msg = '<div class="message '+direction+' no-avatar">\
                             <!-- BEGIN MESSAGE SENDER INFO -->\
                             <div class="sender">\
                                 <a href="javascript:void(0);" title="Rufat Askerov">\
-                                    <div class="avatar">'+data.payload.username[0]+'</div>\
+                                    <img class="avatar" alt="Rufat Askerov">\
                                 </a>\
                             </div>\
                             <!-- END MESSAGE SENDER INFO -->\
@@ -4593,9 +4575,6 @@ TaskSession.prototype.connect = function(roomId){
                 case 10:
                     that.handleInterfaceActionDelete(data);
                     break;
-                case 11:
-                    that.handleInterfaceActionTaskSwitch(data);
-                    break;    
                 default:
                     print("Unsupported message type!");
                     return;
