@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/CrowdCurio/image-annotator#readme",
   "dependencies": {
-    "crowdcurio-client": "^0.1.0",
+    "crowdcurio-client": "^0.1.8",
     "eslint-config-airbnb": "^16.1.0",
     "hammerjs": "^2.0.8",
     "intro.js": "^2.8.0-alpha.1",
