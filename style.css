@@ -1133,7 +1133,7 @@ min-height: 70px;
   left: 0;
   border-top: 3px solid rgb(36, 36, 36);
   width: 900px;
-  left: 25%;
+  left: 10%;
   min-width: auto;
 }
 
@@ -1540,11 +1540,14 @@ span.thumb {
   left: 36%;
   border-radius: 5px;
   border: 3px solid rgba(255, 165, 0, 0.7);
-  top: 50px;
+  top: 5px;
 }
 
 #task-counter.fullscreen{
-  top: auto;
+  position: absolute;
+  right: 550px;
+  left: auto;
+  top: 20px;
 }
 
 #task-counter-task-number{
