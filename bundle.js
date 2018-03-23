@@ -136,6 +136,8 @@ ImageAnnotator.prototype.initialize = function (config) {
           taskSwitchForced: that.handleInterfaceForcedTaskSwitch, // Specify handler for forced task-switch events
           taskSetFocus: that.handleInterfaceTaskSetFocus, // Specify handler for forced task-switch events
           taskQueueSwitch: that.handleInterfaceTaskQueueSwitch,
+          taskUnlock: that.unlockInterface,
+          taskLock: that.lockInterface,
         });
       }
     }
@@ -176,24 +178,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     $('#map').fadeIn();
 
     that.dataLoaded = true;
-
-    // if ('collaboration' in config) {
-    //   if ('active' in config.collaboration) {
-    //     if (config.collaboration.active) {
-    //       // close the loading modal
-    //       // if (that.statedLoaded) {
-    //       //   // that.modals.loading_modal.modal('close');
-
-    //       //   // // close the modal
-    //       //   // that.modals.fetching_task_modal.modal('close');
-    //       // }
-    //     }
-    //   }
-    // } else {
-    //   // close the modal
-    //   that.modals.loading_modal.modal('close');
-    //   that.modals.fetching_task_modal.modal('close');
-    // }
+    that.modals.loading_modal.modal('close');
+    that.modals.fetching_task_modal.modal('close');
 
     const seenTutorial = localStorage.getItem(`crowdcurio-tau-${window.experiment}-seen-tutorial`);
     if (!(seenTutorial)) {
@@ -298,15 +284,15 @@ ImageAnnotator.prototype.postInitialize = function (config) {
               // print("Task session updated.")
             });
 
-            that.modals.loading_modal.modal('close');
+            // that.modals.loading_modal.modal('close');
           });
         }
       } else { // otherwise, hide the modals
         that.stateLoaded = true;
 
         if (that.dataLoaded) {
-          that.modals.loading_modal.modal('close');
-          that.modals.fetching_task_modal.modal('close');
+          // that.modals.loading_modal.modal('close');
+          // that.modals.fetching_task_modal.modal('close');
         }
       }
 
@@ -433,8 +419,38 @@ ImageAnnotator.prototype.postInitialize = function (config) {
   } else {
     ms.changeMode('somethingelse');
   }
+
+  // check if the UI should be locked
+  const taskUnlocked = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-task-unlocked`);
+  if (config.locked === 'never' || !window.experiment) {
+    that.unlockInterface();
+  } else if (taskUnlocked) {
+    that.unlockInterface();
+  }
+
+  $('.locked-overlay').click(() => {
+    alert('The interface is currently locked. Continue talking to Rae to unlock the interface.');
+  });
 };
 
+
+/**
+ * Unlocks the annotation interface.
+ */
+ImageAnnotator.prototype.unlockInterface = function () {
+  print('Unlocking interface.');
+  window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-task-unlocked`, true);
+  $('.locked-overlay').hide();
+};
+
+/**
+ * Locks the annotation interface.
+ */
+ImageAnnotator.prototype.lockInterface = function () {
+  print('Locking interface.');
+  window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-task-unlocked`, false);
+  $('.locked-overlay').show();
+};
 
 /**
  * Attaches handlers to all elements of the interface.
@@ -534,7 +550,6 @@ ImageAnnotator.prototype.attachHandlers = function () {
     // Add handlers
     $('.marker').on('mousedown', (e) => { move_count = 0; clicking = true; dragged = true; ms.selectTool(e); });
     $('.marker').on('mouseup', (e) => { if (move_count > 5) dragged = true; });
-    // $('.marker').on('mousedown', function(e){ms.deleteTool(e);});
 
     $('.marker').mousemove(() => {
       if (clicking === false) return;
@@ -568,6 +583,7 @@ ImageAnnotator.prototype.attachHandlers = function () {
       }
       e.stopImmediatePropagation();
       if (move_count == 0 && that.mode === 'counting') {
+        print('Trying to delete tool.');
         ms.deleteTool(e);
       }
     });
@@ -698,14 +714,14 @@ ImageAnnotator.prototype.render = function (config) {
   // define templates for each component
   const stateVariables = '<input id="m_colour" type="hidden" value="20"/><input id="m_size" type="hidden" value="20"/><input id="zoom" type="hidden" value="1.00"/><input id="zoom_step" type="hidden" value="0.25"/>';
   const toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
-  let annotationSurfaceTemplate = '<div id="main-interface"> <div class="view-divider" style="height: 7px;"></div> <div id="viewer"> <div id="fragment_container"> <div id="markers" class="s20 " style="position:absolute;"> <style>.marker {position: absolute;height: 20px;width: 20px;box-shadow: rgba(0,0,0,.496094) 0 2px 4px;-webkit-border-radius: 15px;border-radius: 15px;}.marker .character {font-size: 12px;line-height: 20px;font-weight: 600;}</style> </div> <div id="fragment"><img class="subject" src=""></div> </div> <div id="map" style="display: none; float: right;"> <div class="map_container"> <img id="thumb" /> <div class="location" style="border: 1px solid black;"></div> </div> </div> </div> <div class="view-divider"></div> <div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;height: 100%;"> {LABEL_SPACE} </div> </div> <div class="view-divider"></div> </div>';
+  let annotationSurfaceTemplate = '<div id="main-interface"> <div class="view-divider" style="height: 7px;"></div> <div id="viewer"> <div class="locked-overlay"><div class="locked-overlay-img"><img src="http://moziru.com/images/lock-clipart-vector-11.png"></div></div><div id="fragment_container"> <div id="markers" class="s20 " style="position:absolute;"> <style>.marker {position: absolute;height: 20px;width: 20px;box-shadow: rgba(0,0,0,.496094) 0 2px 4px;-webkit-border-radius: 15px;border-radius: 15px;}.marker .character {font-size: 12px;line-height: 20px;font-weight: 600;}</style> </div> <div id="fragment"><img class="subject" src=""></div> </div> <div id="map" style="display: none; float: right;"> <div class="map_container"> <img id="thumb" /> <div class="location" style="border: 1px solid black;"></div> </div> </div> </div> <div class="view-divider"></div> <div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;height: 100%;"> {LABEL_SPACE} </div> </div> <div class="view-divider"></div> </div>';
   const practiceWindowTemplate = '<div id="practice_toggles" class="practice side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_toggles_inner"> <div class="toggle-text"> Practice Room <a class="modal-trigger" href="#practice_information_modal" style="color: white;"><i class="fa fa-question-circle" aria-hidden="true"></i></a> <hr/> </div> <div class="practice-task-text"> <div>You have</div> <div class="practice-tasks-number-remaining"><div class="preloader-wrapper active"><div class="spinner-layer" style="border-color: orange"><div class="circle-clipper left"><div class="circle"></div></div><div class="gap-patch"><div class="circle"></div></div><div class="circle-clipper right"><div class="circle"></div></div></div></div></div> <div>available practice tasks.</div> <hr/> </div> <div> <button id="practice-room-btn" class="waves-light btn">Start Practicing</button> </div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const validatePracticeWindowTemplate = '<div id="practice_validation_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_validation_toggles_inner"> <div class="toggle-text"> Check Your Answers <hr/> </div> <div id="validation-examples-container"><div><span id="validation-example-green">Green Circle</span> = Correct Tau</div><div><span id="validation-example-yellow">Yellow Circle</span> = Missed Tau</div><div><span id="validation-example-red">Red Circle</span> = Incorrect (Not Tau)</div></div> <button id="validate-practice-button" class="waves-light btn submit"> <i class="fa fa-check-circle-o" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextPracticeWindowTemplate = '<div id="practice_submission_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_submission_toggles_inner"> <div class="toggle-text"> Next Practice Task <hr/> </div> <button id="next-practice-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextWindowTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr/> </div> <button id="next-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const keypad_template_greek = ' <div id="keypad" style="margin: 0 auto;"> <div id="fullscreen_button"></div> <div id="primary_keyboard" class="main"> <div id="variations"> <div class="example_label">Hover Over Characters<br/>Below for Examples</div> <div class="key_label"></div> <div class="details"> <div class="examples"> <div class="ex_1"></div> <div class="ex_2"></div> </div> </div> </div> <div id="keypad-letter-container" style="width: 535px;float:left;margin-bottom: 15px;"> <div class="upper_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Characters</h4> <p></p> </div> <div id="ku_32" class=" key waves-light btn key-letter"><span class="u">&#x0020;</span><span class="l">&nbsp;</span><span class="label"></span></div> <div id="ku_87" class=" key waves-light btn key-letter"><span class="u">&#x03A3;</span><span class="l"></span><span class="label">Sigma</span></div> <div id="ku_69" class=" key waves-light btn key-letter"><span class="u">&#x0395;</span><span class="l">&#x03B5;</span><span class="label">Epsilon</span></div> <div id="ku_82" class=" key waves-light btn key-letter"><span class="u">&#x03A1;</span><span class="l">&#x03C1;</span><span class="label">Rho</span></div> <div id="ku_84" class=" key waves-light btn key-letter"><span class="u">&#x03A4;</span><span class="l">&#x03C4;</span><span class="label">Tau</span></div> <div id="ku_89" class=" key waves-light btn key-letter"><span class="u">&#x03A5;</span><span class="l">&#x03C5;</span><span class="label">Upsilon</span></div> <div id="ku_85" class=" key waves-light btn key-letter"><span class="u">&#x0398;</span><span class="l">&#x03B8;</span><span class="label">Theta</span></div> <div id="ku_73" class=" key waves-light btn key-letter"><span class="u">&#x0399;</span><span class="l">&#x03B9;</span><span class="label">Iota</span></div> <div id="ku_79" class=" key waves-light btn key-letter"><span class="u">&#x039F;</span><span class="l">&#x03BF;</span><span class="label">Omicron</span></div> <div id="ku_80" class=" key waves-light btn key-letter"><span class="u">&#x03A0;</span><span class="l">&#x03C0;</span><span class="label">Pi</span></div> </div> <div class="middle_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div id="ku_65" class=" key waves-light btn key-letter"><span class="u">&#x0391;</span><span class="l">&#x03B1;</span><span class="label">Alpha</span></div> <div id="ku_83" class=" key waves-light btn key-letter"><span class="u">&#x03F9;</span><span class="l">&#x03F2;</span><span class="label">Sigma</span></div> <div id="ku_68" class=" key waves-light btn key-letter"><span class="u">&#x0394;</span><span class="l">&#x03B4;</span><span class="label">Delta</span></div> <div id="ku_70" class=" key waves-light btn key-letter"><span class="u">&#x03A6;</span><span class="l">&#x03C6;</span><span class="label">Phi</span></div> <div id="ku_71" class=" key waves-light btn key-letter"><span class="u">&#x0393;</span><span class="l">&#x03B3;</span><span class="label">Gamma</span></div> <div id="ku_72" class=" key waves-light btn key-letter"><span class="u">&#x0397;</span><span class="l">&#x03B7;</span><span class="label">Eta</span></div> <div id="ku_74" class=" key waves-light btn key-letter"><span class="u">&#x039E;</span><span class="l">&#x03BE;</span><span class="label">Xi</span></div> <div id="ku_75" class=" key waves-light btn key-letter"><span class="u">&#x039A;</span><span class="l">&#x03BA;</span><span class="label">Kappa</span></div> <div id="ku_76" class=" key waves-light btn key-letter"><span class="u">&#x039B;</span><span class="l">&#x03BB;</span><span class="label">Lambda</span></div> </div> <div class="lower_row standard" style="display: inline-block;width:100%;margin-left: 65px;"> <div id="ku_90" class=" key waves-light btn key-letter"><span class="u">&#x0396;</span><span class="l">&#x03B6;</span><span class="label">Zeta</span></div> <div id="ku_88" class=" key waves-light btn key-letter"><span class="u">&#x03A7;</span><span class="l">&#x03C7;</span><span class="label">Khi</span></div> <div id="ku_67" class=" key waves-light btn key-letter"><span class="u">&#x03A8;</span><span class="l">&#x03C8;</span><span class="label">Psi</span></div> <div id="ku_86" class=" key waves-light btn key-letter"><span class="u">&#x03a9;</span><span class="l">&#x03C9;</span><span class="label">Omega</span></div> <div id="ku_66" class=" key waves-light btn key-letter"><span class="u">&#x0392;</span><span class="l">&#x03B2;</span><span class="label">Beta</span></div> <div id="ku_78" class=" key waves-light btn key-letter"><span class="u">&#x039D;</span><span class="l">&#x03BD;</span><span class="label">Nu</span></div> <div id="ku_77" class=" key waves-light btn key-letter"><span class="u">&#x039C;</span><span class="l">&#x03BC;</span><span class="label">Mu</span></div> </div> <div class="push"></div> </div> <div id="keypad-symbols-container" style="width: 200px;float:left;margin-left:27px;"> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Symbols</h4> <p></p> </div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE646;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE662;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE674;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE6A3;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE68F;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE66A;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x0370;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE616;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE629;</span><</div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x03DB;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE648;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE696;</span></div> </div> </div> </div> </div>';
   let counting_template = '<div id="countingpad" style="margin: 0 auto;"><div id="primary_countingboard" class="main"><div class="row"><div class="col s4 push-s8">{LABEL_SPACE}</div><div id="examples-container-default" class="center example-container col s8 pull-s4">Click one of the labels to the right to begin counting an object and see related examples.</div>{EXAMPLES_SPACE}</div></div> </div>';
-  const focusWindowTemplate = '<div id="focus_toggles" class="submission side_buttons" style="float: left;width: 250px;min-height: 100px;/* display: none; */"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="focus_toggles_inner"> <div class="toggle-text">Current Focus<hr> </div> <div id="task-focus-text"><i>A focus hasn\'t been set yet. </i></div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
+  const focusWindowTemplate = '<div class="chat-container right-hand-fixed-pane"><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="focus_toggles_inner"> <div class="toggle-text">Current Focus<hr> </div> <div id="task-focus-text"><i>A focus hasn\'t been set yet. </i></div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div></div>';
   const taskCounterTemplate = '<div id="task-counter"><div id="task-counter-task-number">Loading Progress</div></div>';
 
   let modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div><div id="tutorial_modal" class="modal" style="top: auto; min-height: 560px;height: 560px;"><div class="modal-content modal-trigger" href="#tutorial_modal" style="height: 100%;padding: 12px;"><div id="carousel-container" class="carousel carousel-slider center " style="height:100% !important;"><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Task Instructions</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/1-start.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will identify <strong>ONLY</strong> Greek Taus in ancient manuscripts written on papyrus. Greek Taus look near identical to the English letter T. Click the <i>"Next"</i> button to learn how the interface works.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#two!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Creating Annotations</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/4-annotation.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can create an annotation by clicking on the image, and you can assign an annotation a letter with the on-screen keyboard. Annotations can be deleted with the Backspace key.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Using the Mini-Map</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/3-mini-map.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">The Mini-Map controls the field-of-view of the annotation surface. You can adjust your perspective by dragging the window in the mini-map.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#three!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Zooming and Fullscreen</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/2-zoom-fullscreen.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can also zoom in and out of the annotation surface with the zooming buttons. In addition, you can also toggle Fullscreen Mode with the fullscreen button to annotate with your entire browser window.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#four!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Completing a Task</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/7-next-task.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">When you\'re ready to go to the next task, click the \'Next Task\" button, and you will be given the next image for annotation.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-close">I\'m Ready to Begin!</button></div></div></div></div>';
@@ -801,6 +817,9 @@ ImageAnnotator.prototype.render = function (config) {
     const ele = $('#task-focus-text');
     ele.html(`<i>${priorFocus}</i>`);
     ele.addClass('active');
+
+    // show the element
+    $('#focus_toggles').show();
   }
 
   parent_container.append(validatePracticeWindowTemplate);
@@ -1438,9 +1457,8 @@ ImageAnnotator.prototype.deleteTool = function (e) {
 
     className = className[0];
     $(`label[lval='${className}'] div`)[0].innerHTML = parseInt($(`label[lval='${className}'] div`)[0].innerHTML) - 1;
-  }
-  $('#markers .selected').each(function (i, m) {
-    const mid = $(this).attr('id').replace('m-', '');
+
+    const mid = $(e.currentTarget).attr('id').replace('m-', '');
 
     /*  remove the marker in storage and from the view */
     delete surface.markers[mid];
@@ -1451,9 +1469,25 @@ ImageAnnotator.prototype.deleteTool = function (e) {
     that.client.delete('annotation', {
       id: annotation_id,
     }, (annotation) => {
-      // print("Annotation ("+annotation_id+") deleted successfully.");
+      print('Annotation (' + annotation_id + ') deleted successfully.');
     });
-  });
+  } else if (this.mode === 'transcription') {
+    $('#markers .selected').each(function (i, m) {
+      const mid = $(this).attr('id').replace('m-', '');
+
+      /*  remove the marker in storage and from the view */
+      delete surface.markers[mid];
+      const annotation_id = $(`#m-${mid}`).attr('annotation-id');
+      $(`#m-${mid}`).remove();
+
+      // delete the annotation in the system
+      that.client.delete('annotation', {
+        id: annotation_id,
+      }, (annotation) => {
+        print('Annotation (' + annotation_id + ') deleted successfully.');
+      });
+    });
+  }
 
   /*  select the next marker, if there are any */
   if ($('.marker').length > 0) {
@@ -2689,8 +2723,10 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
   const focus_toggles = $('#focus_toggles');
   const focus_toggles_inner = $('#focus_toggles_inner');
   const primary_countingboard = $('#primary_countingboard');
+  const fixed_pane = $('.right-hand-fixed-pane');
   const chat_window = $('#chats');
   const task_counter = $('#task-counter');
+  const footer = $('.page-footer');
 
   if (main_interface.hasClass('fullscreen')) {
     main_interface.removeClass('fullscreen');
@@ -2716,7 +2752,9 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     focus_toggles_inner.removeClass('fullscreen');
     chat_window.removeClass('fullscreen');
     task_counter.removeClass('fullscreen');
+    fixed_pane.removeClass('fullscreen');
     crowdcurio_nav_bar.show();
+    footer.show();
   } else {
     main_interface.addClass('fullscreen');
     main.addClass('fullscreen');
@@ -2741,7 +2779,9 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     focus_toggles_inner.addClass('fullscreen');
     chat_window.addClass('fullscreen');
     task_counter.addClass('fullscreen');
+    fixed_pane.addClass('fullscreen');
     crowdcurio_nav_bar.hide();
+    footer.hide();
   }
 
   // resize the map to reflect the visibility of what's visible in fullscreen
@@ -2887,6 +2927,21 @@ ImageAnnotator.prototype.togglePractice = function (e) {
 
 ImageAnnotator.prototype.loadState = function (state) {
   const that = this;
+
+  // figure out the color of each label
+  /* get selected label */
+  let labels = {};
+  let labelCounts = {};
+  print("Checking labels ..")
+  $('.task-option-toggle').each(function(idx, ele){
+    // get the label and lval from the element
+    const label = $(this).attr('id').split('-')[0];
+    const lval = $(this).attr('lval');
+    labels[label] = lval;
+    labelCounts[label] = 0;
+  });
+
+  // iterate over the state 
   for (const idx in state) {
     if (state[idx].hasOwnProperty('position')) {
       const marker = state[idx];
@@ -2897,8 +2952,10 @@ ImageAnnotator.prototype.loadState = function (state) {
       } else if (that.mode === 'transcription') {
         newMarker = `<div annotation-id='${marker.id}' class='marker new' id='m-${key}' style='left: ${marker.position.x - 10}px;top:${marker.position.y - 10}px;background:${$('#m_colour').val()};opacity:${$('#m_opacity').val()}'><div class='character'>${marker.label}</div><div id='delete-marker-${key}' class='delete-marker-btn' style='display:none;'>Delete</div></div>`;
       } else if (that.mode === 'counting') {
-        newMarker = `<div annotation-id='${marker.id}' class='marker new' id='m-${key}' style='left: ${marker.position.x - 10}px;top:${marker.position.y - 10}px;background:${$('#m_colour').val()};opacity:${$('#m_opacity').val()}'><div class='character'></div><div id='delete-marker-${key}' class='delete-marker-btn' style='display:none;'>Delete</div></div>`;
+        newMarker = `<div annotation-id='${marker.id}' class='marker new ${labels[marker.label]}' id='m-${key}' style='left: ${marker.position.x - 10}px;top:${marker.position.y - 10}px;background:${$('#m_colour').val()};opacity:${$('#m_opacity').val()}'><div class='character'></div><div id='delete-marker-${key}' class='delete-marker-btn' style='display:none;'>Delete</div></div>`;
+        labelCounts[marker.label] += 1;
       }
+      
       $('#markers').append(newMarker);
       $(`#m-${key}`).draggable({
         start(e) {
@@ -2912,6 +2969,17 @@ ImageAnnotator.prototype.loadState = function (state) {
       $(`#m-${key}`).on('mouseleave', (e) => { ms.hoverToolOff(e); });
       surface.markers[key] = new Marker(marker.position.x, marker.position.y, marker.label);
     }
+  }
+
+  // if we're counting, update the counting number
+  if(this.mode === 'counting'){
+    $('.task-option-toggle').each(function(idx, ele){
+      // get the label and lval from the element
+      const label = $(this).attr('id').split('-')[0];
+      print("Setting: "+label+" to "+labelCounts[label]);
+      console.log($(this).find('div'));
+      $(this).find('div')[0].innerHTML = labelCounts[label];
+    });
   }
 };
 
@@ -3335,6 +3403,7 @@ ImageAnnotator.prototype.handleInterfaceTaskSetFocus = function (event) {
 
   // save the focus in local storage
   window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-focus`, event.payload.event.focus);
+  ele.fadeIn();
 };
 
 /**
@@ -3366,18 +3435,17 @@ ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
     global.oImg.src = task.url;
     $('.subject').attr('src', task.url);
 
-    if (config.collaboration) {
-      if (config.collaboration.active) {
-        // update the state of the task session
-        that.client.update('tasksession', {
-          id: that.client.task_session.task_session,
-          channel_name: that.client.task_session.channel_name,
-          data: { type: 'Data', id: task.id },
-        }, () => {
-          // print("Task session updated.")
-        });
-      }
-    }
+    // update the state of the task session
+    that.client.update('tasksession', {
+      id: that.client.task_session.task_session,
+      channel_name: that.client.task_session.channel_name,
+      data: { type: 'Data', id: task.id },
+    }, () => {
+      // print("Task session updated.")
+    });
+
+    // hide the map
+    $('#map').fadeIn();
 
     // close the modal
     that.modals.fetching_task_modal.modal('close');
@@ -4276,7 +4344,11 @@ TaskSession.prototype.fetchPolicy = function(){
  * Connects and maintains a valid websocket connection for a particula task session
  */
 TaskSession.prototype.connect = function(roomId){
-    $("#task-container").append('<div id="chats"></div>');
+    var parent_ele = $('.chat-container');
+    if(!parent_ele){
+        parent_ele = $("#task-container");
+    }
+    parent_ele.append('<div id="chats" class="chats-div"></div>');
 
     var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
     var ws_path = ws_scheme + '://' + window.location.host + "/collaboration/stream/";

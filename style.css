@@ -806,7 +806,7 @@ min-height: 70px;
   margin-left: 10px;
 }
 
-#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #focus_toggles_inner {
+#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #focus_toggles_inner{
   margin-top: 25px;
   border: 1px solid black;
   background-color: #353b43;
@@ -819,13 +819,6 @@ min-height: 70px;
       z-index: 9;
       top: 210px;
       right: 15px;
-  }
-
-  #focus_toggles.fullscreen {
-      position: absolute;
-      z-index: 9;
-      right: 260px;
-      top: 0;
   }
 
   right: 260px;
@@ -1099,7 +1092,7 @@ min-height: 70px;
   right: 15px;
 }
 
-#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner {
+#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #focus_toggles_inner {
   margin-top: 25px;
   border: 1px solid black;
   background-color: #353b43;
@@ -1130,11 +1123,12 @@ min-height: 70px;
 #bottom-controls.fullscreen {
   bottom: 0px;
   position: absolute;
-  left: 0;
+  left: auto;
   border-top: 3px solid rgb(36, 36, 36);
   width: 900px;
-  left: 10%;
+  right: 360px;
   min-width: auto;
+  z-index: 8;
 }
 
 #task-row-container.fullscreen {
@@ -1172,7 +1166,7 @@ min-height: 70px;
   background: #fff;
   border: 2px solid #455a64;
   position: absolute;
-  z-index: 99;
+  z-index: 6;
   border-radius: 6px;
   -webkit-border-radius: 6px;
   -moz-border-radius: 6px;
@@ -1536,7 +1530,7 @@ span.thumb {
   height: 55px;
   color: white;
   background: #232323;
-  position: absolute;
+  position: fixed;
   left: 36%;
   border-radius: 5px;
   border: 3px solid rgba(255, 165, 0, 0.7);
@@ -1556,4 +1550,68 @@ span.thumb {
   margin-left: 75px;
   margin-top: 5px;
   font-family: 'Raleway', sans-serif;
+}
+
+
+.locked-overlay {
+  position: absolute;
+  left: 0;
+  background: rgba(0, 0, 0, 0.5);
+  height: 100%;
+  width: 100%;
+  z-index: 7;
+}
+
+.locked-overlay-img {
+  height: 150px;
+  width: 150px;
+  margin-left: 43%;
+  margin-top: 150px;
+}
+
+.locked-overlay-img img{
+  height: 100%;
+}
+
+.right-hand-fixed-pane {
+  position: fixed;
+  z-index: 999;
+  height: 510px;
+  width: 340px;
+  right: 10px;
+}
+
+.right-hand-fixed-pane.fullscreen {
+  bottom: 5px;
+  top: auto;
+}
+
+.right-hand-fixed-pane .chats-div {
+  position: auto !important;
+  z-index: auto !important;
+  height: 400px;
+  width: auto !important;
+  top: auto !important;
+  margin-top: 10px;
+  right: 10px !important;
+}
+
+.right-hand-fixed-pane .chats-div.fullscreen {
+  position: auto !important;
+  z-index: auto !important;
+  height: 400px;
+  top: auto !important;
+  margin-top: 10px;
+  right: 10px !important;
+}
+
+#focus_toggles {
+  width: 100%;
+}
+
+#focus_toggles.fullscreen {
+  bottom: 420px !important;
+  position: fixed;
+  right: 10px;
+  width: 340px;
 }
