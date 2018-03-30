@@ -806,7 +806,7 @@ min-height: 70px;
   margin-left: 10px;
 }
 
-#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #focus_toggles_inner{
+#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner{
   margin-top: 25px;
   border: 1px solid black;
   background-color: #353b43;
@@ -814,7 +814,7 @@ min-height: 70px;
 }
 
 @media only screen and (min-width:960px){
-  #submission_toggles.fullscreen, #practice_validation_toggles.fullscreen {
+  #practice_validation_toggles.fullscreen {
       position: absolute;
       z-index: 9;
       top: 210px;
@@ -1092,8 +1092,7 @@ min-height: 70px;
   right: 15px;
 }
 
-#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #focus_toggles_inner {
-  margin-top: 25px;
+#practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner, #queue-switch-inner {
   border: 1px solid black;
   background-color: #353b43;
   padding: 5px;
@@ -1176,7 +1175,7 @@ min-height: 70px;
 }
 
 #map.fullscreen {
-  right: 50px;
+  right: 270px;
 }
 
 .location {
@@ -1500,7 +1499,10 @@ span.thumb {
 }
 
 .tutorial-img {
-  height: 300px;
+  width: 80%;
+  height:80%;
+  max-height: 300px;
+  max-width: 455px;
 }
 
 .tutorial-btn-next {
@@ -1514,13 +1516,14 @@ span.thumb {
 }
 
 #task-focus-text {
-  color: grey;
+  color: orange;
   font-weight: 600;
   text-align: center;
 }
 
 #task-focus-text.active {
   color: orange;
+  font-size: 1.0em;
 }
 
 #task-counter{
@@ -1606,12 +1609,69 @@ span.thumb {
 }
 
 #focus_toggles {
+  width: fit-content;
+  float: right;
+  color: white;
+  background: #232323;
+  position: relative;
+  border-radius: 5px;
+  border: 3px solid rgba(255, 165, 0, 0.7);
+  bottom: 295px;
+  right: 10px;
+  padding: 10px;
+  z-index: 10;
+  font-size: 1.2em;
+}
+
+#focus_toggles_inner {
+  font-size: 1.2em;
+  width: 100%;
+  height: 100%;
+}
+
+#task-focus-text-main {
+  color: white;
+}
+
+textarea#confidenceTextArea::placeholder {
+  font-size: 0.8em;
+  font-style: italic;
+}
+
+.confidence-textarea-container {
+  background-color: white;
+  border: 1px solid orange;
+  margin-top: 5px;
+}
+
+#confidenceTextArea {
+  height: 100%;
+  resize: none;
+  border: none;
+}
+
+.next-button-supporting-question {
+  color: orange;
+  font-weight: 600;
+}
+
+#queue-switch-container {
   width: 100%;
 }
 
-#focus_toggles.fullscreen {
-  bottom: 420px !important;
-  position: fixed;
-  right: 10px;
-  width: 340px;
+#right-action-panel {
+  float: left;
+  z-index: 9;
+  height: 100%;
+  width: 250px;
+  right: 15px;
+}
+
+#right-action-panel.fullscreen {
+  float: auto;
+  position: absolute;
+}
+
+button:focus {
+  background-color: #efefef !important;
 }

@@ -1,6 +1,7 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 (function (global){
 const $ = require('jquery');
+require('sweetalert');
 
 // dev tools
 const print = require('./../utils/print');
@@ -18,7 +19,7 @@ const Marker = require('./../models/marker');
 const ImageMiniMap = require('./image-mini-map');
 const Timer = require('./../utils/timer');
 const CrowdCurioClient = require('crowdcurio-client');
-const IntroJS = require('intro.js');
+const hopscotch = require('hopscotch');
 
 window.materializeIncluded = true;
 
@@ -31,6 +32,7 @@ function ImageAnnotator() {
   surface = this;
 
   this.client = new CrowdCurioClient();
+  this.collaboration = false;
 
   /*  establish the data structures */
   this.markers = {};
@@ -89,6 +91,8 @@ function ImageAnnotator() {
 
   this.stateLoaded = false;
   this.dataLoaded = false;
+
+  this.timer = new Timer();
 }
 
 
@@ -100,6 +104,7 @@ function ImageAnnotator() {
  */
 ImageAnnotator.prototype.initialize = function (config) {
   const that = this;
+  window.$ = $;
   const annotations_url = 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/greenstone/taus.json';
   /* make a request for the known annotations */
   $.getJSON(annotations_url)
@@ -133,12 +138,15 @@ ImageAnnotator.prototype.initialize = function (config) {
         this.client.task_session.setListeners({
           save: that.handleInterfaceUpdateSave, // Specify handler for save events.
           delete: that.handleInterfaceUpdateDelete, // Specify handler for delete events.
-          taskSwitchForced: that.handleInterfaceForcedTaskSwitch, // Specify handler for forced task-switch events
+          taskSwitchForced: that.handleInterfaceForcedNextTask, // Specify handler for forced task-switch events
           taskSetFocus: that.handleInterfaceTaskSetFocus, // Specify handler for forced task-switch events
           taskQueueSwitch: that.handleInterfaceTaskQueueSwitch,
           taskUnlock: that.unlockInterface,
           taskLock: that.lockInterface,
+          onUserJoin: that.handleInterfaceUserJoin,
         });
+
+        this.collaboration = true;
       }
     }
   }
@@ -149,6 +157,7 @@ ImageAnnotator.prototype.initialize = function (config) {
 
 ImageAnnotator.prototype.postInitialize = function (config) {
   const that = this;
+
   // define an image w/ load events
   global.oImg = new Image(); // $('.subject');
   const Img = $('.subject');
@@ -187,6 +196,9 @@ ImageAnnotator.prototype.postInitialize = function (config) {
         that.modals.tutorial_modal.modal('open');
       });
     }
+
+    // star the task timer
+    that.timer.start();
   };
 
   /*  initialize the mini map */
@@ -203,7 +215,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
   // update the task counter
   const task_counter = $('#task-counter-task-number');
-  task_counter.text(`Task Progress: ${that.completedTasks + 1} / 10`);
+  const completed = parseInt(that.completedTasks) + 1;
+  task_counter.text(`Task Progress: ${completed} / 10`);
 
   // set-up routing
   const taskSwitched = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-task-switch`);
@@ -260,39 +273,55 @@ ImageAnnotator.prototype.postInitialize = function (config) {
       global.oImg.src = task.url;
       $('.subject').attr('src', task.url);
 
-      // handle collaboration
-      if (config.collaboration) {
-        if (config.collaboration.active) {
-          that.client.listAll('annotation', {
-            data: task.id,
-            experiment: window.experiment,
-            condition: window.condition,
-            task: window.task,
-            task_session: that.client.task_session.task_session,
-          }, (state) => {
-            print('State: ');
-            console.log(state);
-            that.loadState(state);
-            that.stateLoaded = true;
+      // handle annotations made outside of a task session
+      let tsInstance = null;
+      if (that.client.task_session !== null) {
+        if (that.client.task_session.task_session !== null) {
+          tsInstance = that.client.task_session.task_session;
+        }
+      }
 
-            // update the state of the task session
+      if (tsInstance === null) {
+        // handle collaboration
+        that.client.listAll('annotation', {
+          owner: window.user,
+          data: task.id,
+          experiment: window.experiment,
+          condition: window.condition,
+          task: window.task,
+        }, (state) => {
+          print('State: ');
+          console.log(state);
+          that.loadState(state);
+          that.stateLoaded = true;
+        });
+      } else {
+      // handle collaboration
+        that.client.listAll('annotation', {
+          data: task.id,
+          experiment: window.experiment,
+          condition: window.condition,
+          task: window.task,
+          task_session: tsInstance,
+        }, (state) => {
+          print('State: ');
+          console.log(state);
+          that.loadState(state);
+          that.stateLoaded = true;
+        });
+
+        // if we're collaborating, update the tasksession's reference
+        if (config.collaboration) {
+          if (config.collaboration.active) {
+          // update the state of the task session
             that.client.update('tasksession', {
               id: that.client.task_session.task_session,
               channel_name: that.client.task_session.channel_name,
               data: { type: 'Data', id: task.id },
             }, () => {
-              // print("Task session updated.")
+              print(`Data State Updated: ID ${task.id}`);
             });
-
-            // that.modals.loading_modal.modal('close');
-          });
-        }
-      } else { // otherwise, hide the modals
-        that.stateLoaded = true;
-
-        if (that.dataLoaded) {
-          // that.modals.loading_modal.modal('close');
-          // that.modals.fetching_task_modal.modal('close');
+          }
         }
       }
 
@@ -301,11 +330,28 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     }
   });
 
-  /* attach the handler for hte submit / next-task button */
-  $('#next-button').click((e) => {
+  that.onNextTask = function () {
     // 1. validation
     const i = $('.marker').length;
     if (i === 0) { alert('Error: You cannot submit without making annotations!'); return; }
+
+    // 1.5 validation for forms with questions
+    const confidenceForm = $('#confidenceTextArea');
+    const chatWindow = $('#chats');
+    let confidenceFormVal = '';
+    if (confidenceForm.length) {
+      confidenceFormVal = $.trim(confidenceForm.val());
+      if (!confidenceFormVal) {
+        alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
+      }
+    } else if (chatWindow.length) {
+      // if the chat is visible, get the last response from the user
+      const msgs = $('.message.out');
+      confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
+    }
+
+    // stop the timer
+    that.timer.stop();
 
     // close the modal
     that.modals.fetching_task_modal.modal('open');
@@ -314,17 +360,24 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     $('#map').fadeOut();
 
     // 2.5. calculate accuracy
-    that.calculateAccuracy(that.data.name.split('-')[0]);
+    const performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
+
+    const content = {
+      confidence: confidenceFormVal,
+      performance,
+      taskTime: that.timer.getTime(),
+    };
 
     // 3. save the new response
     that.client.create('response', {
-      content: that.markers,
+      content,
     }, (result) => {
       console.log('Result after save:');
       console.log(result);
 
       // reset the surface
       ms.resetSurface();
+      that.timer.reset();
 
       // get the next task
       that.client.getNextTask(that.currentQueue, (task) => {
@@ -360,6 +413,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
             setTimeout(() => {
               // otherwise, increment the user's experiment workflow
+              // alert("This should transition the user.");
               incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
             }, 1000);
           }
@@ -373,7 +427,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
           // update teh task counter
           const task_counter = $('#task-counter-task-number');
-          task_counter.text(`Task Progress: ${that.completedTasks + 1} / 10`);
+          const completed = parseInt(that.completedTasks) + 1;
+          task_counter.text(`Task Progress: ${completed} / 10`);
 
           if (config.collaboration) {
             if (config.collaboration.active) {
@@ -391,17 +446,42 @@ ImageAnnotator.prototype.postInitialize = function (config) {
           // close the modal
           that.modals.fetching_task_modal.modal('close');
 
+          // if ESM is enabled, show the modal
           setTimeout(() => {
-            that.modals.survey_efficacy_modal.modal('open');
+            if (config.sampling) {
+              that.modals.survey_efficacy_modal.modal('open');
+            }
           }, 500);
 
           // switch the mode back
           ms.changeMode(config.mode);
+          that.timer.start();
         }
       });
     });
+  };
+
+  /* attach the handler for hte submit / next-task button */
+  $('#next-button').click((e) => {
+    that.onNextTask();
   });
 
+  $('#queue-switch-button').click(() => {
+    swal({
+      title: 'Are you sure you want to switch?',
+      text: 'You will not be able to return to the hard tasks.',
+      icon: 'warning',
+      buttons: ['No', 'Yes, I want to switch to the easier tasks.'],
+      dangerMode: true,
+      confirmButtonColor: '#DD6B55',
+    })
+      .then((willTransition) => {
+        if (willTransition) {
+          print('Switching task queues ...');
+          that.switchTaskQueues('easy');
+        }
+      });
+  });
 
   /* attach the handler for the practice validation button */
   $('#validate-practice-button').click(() => {
@@ -481,7 +561,8 @@ ImageAnnotator.prototype.attachHandlers = function () {
     // Keydown
   $('*').on('keydown', (e) => {
     const chat_box = document.getElementById('chat-input-box');
-    if (document.activeElement === chat_box) {
+    const confidence_form = document.getElementById('confidenceTextArea');
+    if (document.activeElement === chat_box || document.activeElement === confidence_form) {
       return; // return if we're typing in the chat window
     }
 
@@ -713,40 +794,72 @@ ImageAnnotator.prototype.attachHandlers = function () {
 ImageAnnotator.prototype.render = function (config) {
   // define templates for each component
   const stateVariables = '<input id="m_colour" type="hidden" value="20"/><input id="m_size" type="hidden" value="20"/><input id="zoom" type="hidden" value="1.00"/><input id="zoom_step" type="hidden" value="0.25"/>';
-  const toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div><div class="toggle-text">View<hr/></div><div id="fullscreen"><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map"><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
+  const toggleControlTemplate = '<div id="zoom_view_toggles" class="side_buttons" style="float: left;margin-right: 10px;"><div id="controls"><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div><div id="toggles"><div class="toggle-text">Zoom<hr/></div><div id="zoom_in"><div class="toggle-button waves-light btn"><span id="zoom-in-btn-icon" class="fa fa-search-plus"></span></div><div class="action"></div></div><div id="zoom_out"><div class="toggle-button waves-light btn"><span id="zoom-out-btn-icon" class="fa fa-search-minus"></span></div><div class="action"></div></div><div class="empty-space"></div><div class="toggle-text">View<hr/></div><div id="fullscreen" title="Toggle fullscreen."><div class="toggle-button waves-light btn"><span id="fullscreen-btn-icon" class="fa fa-arrows-alt"></span></div><div class="action"></div></div><div id="toggle-mini-map" title="Toggle the visibility of the mini-map."><div class="toggle-button waves-light btn"><span id="toggle-mini-map-icon" class="fa fa-window-restore" style="left: 12px;"></span></div><div class="action"></div></div></div><div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div></div></div>';
   let annotationSurfaceTemplate = '<div id="main-interface"> <div class="view-divider" style="height: 7px;"></div> <div id="viewer"> <div class="locked-overlay"><div class="locked-overlay-img"><img src="http://moziru.com/images/lock-clipart-vector-11.png"></div></div><div id="fragment_container"> <div id="markers" class="s20 " style="position:absolute;"> <style>.marker {position: absolute;height: 20px;width: 20px;box-shadow: rgba(0,0,0,.496094) 0 2px 4px;-webkit-border-radius: 15px;border-radius: 15px;}.marker .character {font-size: 12px;line-height: 20px;font-weight: 600;}</style> </div> <div id="fragment"><img class="subject" src=""></div> </div> <div id="map" style="display: none; float: right;"> <div class="map_container"> <img id="thumb" /> <div class="location" style="border: 1px solid black;"></div> </div> </div> </div> <div class="view-divider"></div> <div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;height: 100%;"> {LABEL_SPACE} </div> </div> <div class="view-divider"></div> </div>';
   const practiceWindowTemplate = '<div id="practice_toggles" class="practice side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_toggles_inner"> <div class="toggle-text"> Practice Room <a class="modal-trigger" href="#practice_information_modal" style="color: white;"><i class="fa fa-question-circle" aria-hidden="true"></i></a> <hr/> </div> <div class="practice-task-text"> <div>You have</div> <div class="practice-tasks-number-remaining"><div class="preloader-wrapper active"><div class="spinner-layer" style="border-color: orange"><div class="circle-clipper left"><div class="circle"></div></div><div class="gap-patch"><div class="circle"></div></div><div class="circle-clipper right"><div class="circle"></div></div></div></div></div> <div>available practice tasks.</div> <hr/> </div> <div> <button id="practice-room-btn" class="waves-light btn">Start Practicing</button> </div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const validatePracticeWindowTemplate = '<div id="practice_validation_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_validation_toggles_inner"> <div class="toggle-text"> Check Your Answers <hr/> </div> <div id="validation-examples-container"><div><span id="validation-example-green">Green Circle</span> = Correct Tau</div><div><span id="validation-example-yellow">Yellow Circle</span> = Missed Tau</div><div><span id="validation-example-red">Red Circle</span> = Incorrect (Not Tau)</div></div> <button id="validate-practice-button" class="waves-light btn submit"> <i class="fa fa-check-circle-o" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
+  const queueSwitchUserTriggeredWindowTemplate = '<div id="queue-switch-container" class="submission side_buttons"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="queue-switch-inner"> <div class="toggle-text"> Switch to Easy Tasks <hr> </div> <div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You can switch to easier tasks whenever you want. However, you will only earn $0.10 per task instead of $0.50.</span></div></div><button id="queue-switch-button" class="waves-light btn orange darken-5" style="width: 100%;">SWITCH TASKS</button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
+  const queueSwitchSystemTriggeredWindowTemplate = '<div id="queue-switch-container" class="submission side_buttons"> <div id="controls"> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="queue-switch-inner"> <div class="toggle-text"> Switch to Easy Tasks <hr> </div> <div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You can switch to easier tasks whenever you want. However, you will only earn $0.10 per task instead of $0.50.</span></div></div><button id="queue-switch-button" class="waves-light btn" disabled="disabled" style="font-size: 0.9em;width: 100%;">Talk to Rae to Switch</button> </div> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextPracticeWindowTemplate = '<div id="practice_submission_toggles" class="submission side_buttons" style="display: none; float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="practice_submission_toggles_inner"> <div class="toggle-text"> Next Practice Task <hr/> </div> <button id="next-practice-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextWindowTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr/> </div> <button id="next-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
-  const keypad_template_greek = ' <div id="keypad" style="margin: 0 auto;"> <div id="fullscreen_button"></div> <div id="primary_keyboard" class="main"> <div id="variations"> <div class="example_label">Hover Over Characters<br/>Below for Examples</div> <div class="key_label"></div> <div class="details"> <div class="examples"> <div class="ex_1"></div> <div class="ex_2"></div> </div> </div> </div> <div id="keypad-letter-container" style="width: 535px;float:left;margin-bottom: 15px;"> <div class="upper_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Characters</h4> <p></p> </div> <div id="ku_32" class=" key waves-light btn key-letter"><span class="u">&#x0020;</span><span class="l">&nbsp;</span><span class="label"></span></div> <div id="ku_87" class=" key waves-light btn key-letter"><span class="u">&#x03A3;</span><span class="l"></span><span class="label">Sigma</span></div> <div id="ku_69" class=" key waves-light btn key-letter"><span class="u">&#x0395;</span><span class="l">&#x03B5;</span><span class="label">Epsilon</span></div> <div id="ku_82" class=" key waves-light btn key-letter"><span class="u">&#x03A1;</span><span class="l">&#x03C1;</span><span class="label">Rho</span></div> <div id="ku_84" class=" key waves-light btn key-letter"><span class="u">&#x03A4;</span><span class="l">&#x03C4;</span><span class="label">Tau</span></div> <div id="ku_89" class=" key waves-light btn key-letter"><span class="u">&#x03A5;</span><span class="l">&#x03C5;</span><span class="label">Upsilon</span></div> <div id="ku_85" class=" key waves-light btn key-letter"><span class="u">&#x0398;</span><span class="l">&#x03B8;</span><span class="label">Theta</span></div> <div id="ku_73" class=" key waves-light btn key-letter"><span class="u">&#x0399;</span><span class="l">&#x03B9;</span><span class="label">Iota</span></div> <div id="ku_79" class=" key waves-light btn key-letter"><span class="u">&#x039F;</span><span class="l">&#x03BF;</span><span class="label">Omicron</span></div> <div id="ku_80" class=" key waves-light btn key-letter"><span class="u">&#x03A0;</span><span class="l">&#x03C0;</span><span class="label">Pi</span></div> </div> <div class="middle_row standard" style="display: inline-block;width:100%;margin-left: 35px;"> <div id="ku_65" class=" key waves-light btn key-letter"><span class="u">&#x0391;</span><span class="l">&#x03B1;</span><span class="label">Alpha</span></div> <div id="ku_83" class=" key waves-light btn key-letter"><span class="u">&#x03F9;</span><span class="l">&#x03F2;</span><span class="label">Sigma</span></div> <div id="ku_68" class=" key waves-light btn key-letter"><span class="u">&#x0394;</span><span class="l">&#x03B4;</span><span class="label">Delta</span></div> <div id="ku_70" class=" key waves-light btn key-letter"><span class="u">&#x03A6;</span><span class="l">&#x03C6;</span><span class="label">Phi</span></div> <div id="ku_71" class=" key waves-light btn key-letter"><span class="u">&#x0393;</span><span class="l">&#x03B3;</span><span class="label">Gamma</span></div> <div id="ku_72" class=" key waves-light btn key-letter"><span class="u">&#x0397;</span><span class="l">&#x03B7;</span><span class="label">Eta</span></div> <div id="ku_74" class=" key waves-light btn key-letter"><span class="u">&#x039E;</span><span class="l">&#x03BE;</span><span class="label">Xi</span></div> <div id="ku_75" class=" key waves-light btn key-letter"><span class="u">&#x039A;</span><span class="l">&#x03BA;</span><span class="label">Kappa</span></div> <div id="ku_76" class=" key waves-light btn key-letter"><span class="u">&#x039B;</span><span class="l">&#x03BB;</span><span class="label">Lambda</span></div> </div> <div class="lower_row standard" style="display: inline-block;width:100%;margin-left: 65px;"> <div id="ku_90" class=" key waves-light btn key-letter"><span class="u">&#x0396;</span><span class="l">&#x03B6;</span><span class="label">Zeta</span></div> <div id="ku_88" class=" key waves-light btn key-letter"><span class="u">&#x03A7;</span><span class="l">&#x03C7;</span><span class="label">Khi</span></div> <div id="ku_67" class=" key waves-light btn key-letter"><span class="u">&#x03A8;</span><span class="l">&#x03C8;</span><span class="label">Psi</span></div> <div id="ku_86" class=" key waves-light btn key-letter"><span class="u">&#x03a9;</span><span class="l">&#x03C9;</span><span class="label">Omega</span></div> <div id="ku_66" class=" key waves-light btn key-letter"><span class="u">&#x0392;</span><span class="l">&#x03B2;</span><span class="label">Beta</span></div> <div id="ku_78" class=" key waves-light btn key-letter"><span class="u">&#x039D;</span><span class="l">&#x03BD;</span><span class="label">Nu</span></div> <div id="ku_77" class=" key waves-light btn key-letter"><span class="u">&#x039C;</span><span class="l">&#x03BC;</span><span class="label">Mu</span></div> </div> <div class="push"></div> </div> <div id="keypad-symbols-container" style="width: 200px;float:left;margin-left:27px;"> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class="info"> <h4 style="color: white;font-size: 18px;margin-top: 0;margin-bottom: 0;font-weight:600;">Greek Symbols</h4> <p></p> </div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE646;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE662;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE674;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE6A3;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE68F;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE66A;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x0370;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE616;</span></div> </div> <div class="standard symbol-container" style="display: inline-block;width:100%;"> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE629;</span><</div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#x03DB;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE648;</span></div> <div class=" key waves-light btn" style="font-family: Grec-Subset;font-size: 1.7em;padding-top: 3px;padding-left: 1px;"><span class="u">&#xE696;</span></div> </div> </div> </div> </div>';
-  let counting_template = '<div id="countingpad" style="margin: 0 auto;"><div id="primary_countingboard" class="main"><div class="row"><div class="col s4 push-s8">{LABEL_SPACE}</div><div id="examples-container-default" class="center example-container col s8 pull-s4">Click one of the labels to the right to begin counting an object and see related examples.</div>{EXAMPLES_SPACE}</div></div> </div>';
-  const focusWindowTemplate = '<div class="chat-container right-hand-fixed-pane"><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="focus_toggles_inner"> <div class="toggle-text">Current Focus<hr> </div> <div id="task-focus-text"><i>A focus hasn\'t been set yet. </i></div> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div></div>';
+  const nextWindowWithQuestionsTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><hr> <div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span style="color: white;">Alongside your annotations, please answer the following question(s):</span></div></div><div class="row"><div class="col s12" style="text-align: center;"><span class="next-button-supporting-question">1. How well do you think you did on this task?</span><div class="row confidence-textarea-container"><textarea id="confidenceTextArea" placeholder="State how well you think you did here."></textarea></div></div></div><button id="next-button" class="waves-light btn submit"> SUBMIT </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
+  const nextWindowBotTemplate = '<div id="submission_toggles" class="submission side_buttons fullscreen" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner" class="fullscreen"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><button id="next-button-disabled" class="waves-light btn" disabled="disabled" style="font-size: 0.9em;width: 100%;">Talk to Rae to Submit</button>  </div> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
+  let counting_template = '<div id="countingpad" style="margin: 0 auto;"><div id="primary_countingboard" class="main"><div class="row"><div class="col s4 push-s8">{LABEL_SPACE}</div><div id="examples-container-default" class="center example-container col s8 pull-s4">Click one of the labels to the right to begin counting an object and see related examples.</div>{EXAMPLES_SPACE}</div></div> </div><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"><div id="focus_toggles_inner"><div id="task-focus-text"><span>Focus On: </span><span id="task-focus-text-main"><i>No Focus</i></span></div></div></div></div>';
   const taskCounterTemplate = '<div id="task-counter"><div id="task-counter-task-number">Loading Progress</div></div>';
+  const rightActionPanel = '<div id="right-action-panel"></div>';
 
-  let modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div><div id="tutorial_modal" class="modal" style="top: auto; min-height: 560px;height: 560px;"><div class="modal-content modal-trigger" href="#tutorial_modal" style="height: 100%;padding: 12px;"><div id="carousel-container" class="carousel carousel-slider center " style="height:100% !important;"><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Task Instructions</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/1-start.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will identify <strong>ONLY</strong> Greek Taus in ancient manuscripts written on papyrus. Greek Taus look near identical to the English letter T. Click the <i>"Next"</i> button to learn how the interface works.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#two!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Creating Annotations</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/4-annotation.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can create an annotation by clicking on the image, and you can assign an annotation a letter with the on-screen keyboard. Annotations can be deleted with the Backspace key.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Using the Mini-Map</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/3-mini-map.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">The Mini-Map controls the field-of-view of the annotation surface. You can adjust your perspective by dragging the window in the mini-map.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#three!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Zooming and Fullscreen</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/2-zoom-fullscreen.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can also zoom in and out of the annotation surface with the zooming buttons. In addition, you can also toggle Fullscreen Mode with the fullscreen button to annotate with your entire browser window.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#four!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Completing a Task</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/7-next-task.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">When you\'re ready to go to the next task, click the \'Next Task\" button, and you will be given the next image for annotation.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-close">I\'m Ready to Begin!</button></div></div></div></div>';
+  let modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div>';
 
+  // add CSS to the header
+  const header = $("head");
+  header.append('<link rel="stylesheet" type="text/css" href="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/hopscotch.css"/>');
 
   if ('collaboration' in config) {
     if ('active' in config.collaboration) {
       if (config.collaboration.active) {
         // 1. active
         if (config.collaboration.style === 'self-image') {
-          modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div><div id="tutorial_modal" class="modal" style="top: auto; min-height: 560px;height: 560px;"><div class="modal-content modal-trigger" href="#tutorial_modal" style="height: 100%;padding: 12px;"><div id="carousel-container" class="carousel carousel-slider center " style="height:100% !important;"><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Task Instructions</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/1-start.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will identify <strong>ONLY</strong> Greek Taus in ancient manuscripts written on papyrus. Greek Taus look near identical to the English letter T. Click the <i>"Next"</i> button to learn how the interface works.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#two!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Creating Annotations</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/4-annotation.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can create an annotation by clicking on the image, and you can assign an annotation a letter with the on-screen keyboard. Annotations can be deleted with the Backspace key.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#three!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Using the Mini-Map</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/3-mini-map.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">The Mini-Map controls the field-of-view of the annotation surface. You can adjust your perspective by dragging the window in the mini-map.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#four!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Zooming and Fullscreen</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/2-zoom-fullscreen.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can also zoom in and out of the annotation surface with the zooming buttons. In addition, you can also toggle Fullscreen Mode with the fullscreen button to annotate with your entire browser window.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#five!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Collaborate with Tate</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/5-tate-intro.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will be accompanied by <strong><i>Tate</i></strong>, a bot designed to annotate with you as a team. As you begin each task, you should engage <strong><i>Tate</i></strong> for help when you need it. </div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#six!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Annotating with Tate</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/6-tate-annotation.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">After you engage <strong><i>Tate</i></strong> in conversation, the bot will try to work with you by annotating the image. Tate will annotate <strong><i>in parallel</i></strong> with you, and will <strong><i>only</i></strong> annotate when you tell him to.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Completing a Task</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/7-next-task.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">When you\'re ready to go to the next task, click the \'Next Task\" button, and you will be given the next image for annotation.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-close">I\'m Ready to Begin!</button></div></div></div></div>';
+          modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div>';
         } else { // 2. passive
-          modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div><div id="tutorial_modal" class="modal" style="top: auto; min-height: 560px;height: 560px;"><div class="modal-content modal-trigger" href="#tutorial_modal" style="height: 100%;padding: 12px;"><div id="carousel-container" class="carousel carousel-slider center " style="height:100% !important;"><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Task Instructions</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/1-start.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will identify <strong>ONLY</strong> Greek Taus in ancient manuscripts written on papyrus. Greek Taus look near identical to the English letter T. Click the <i>"Next"</i> button to learn how the interface works.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Creating Annotations</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/4-annotation.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can create an annotation by clicking on the image, and you can assign an annotation a letter with the on-screen keyboard. Annotations can be deleted with the Backspace key.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Using the Mini-Map</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/3-mini-map.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">The Mini-Map controls the field-of-view of the annotation surface. You can adjust your perspective by dragging the window in the mini-map.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Zooming and Fullscreen</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/2-zoom-fullscreen.gif" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">You can also zoom in and out of the annotation surface with the zooming buttons. In addition, you can also toggle Fullscreen Mode with the fullscreen button to annotate with your entire browser window.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Collaborate with Tate</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/8-tate-intro-passive.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">In this task, you will be accompanied by <strong><i>Tate</i></strong>, a bot designed to annotate with you as a team. As you begin each task, you should engage <strong><i>Tate</i></strong> for help when you need it. </div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Talking with Tate</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/9-tate-feedback.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">After you engage <strong><i>Tate</i></strong> in conversation, the bot will try to monitor your performance. Tate will specifically give you feedback when you go to the next task.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">Next</button></div><div class="carousel-item blue-grey lighten-3 black-text" href="#one!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">Completing a Task</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/7-next-task.png" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">When you\'re ready to go to the next task, click the \'Next Task\" button, and you will be given the next image for annotation.</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-close">I\'m Ready to Begin!</button></div></div></div></div>';
+          modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all the Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div>';
         }
       }
     }
   }
 
+  // check for a dynamic tutorial
+  if ('tutorial' in config) {
+    let tutorialModal = '<div id="tutorial_modal" class="modal" style="top: auto; min-height: 560px;height: 560px;"><div class="modal-content modal-trigger" href="#tutorial_modal" style="height: 100%;padding: 12px;"><div id="carousel-container" class="carousel carousel-slider center " style="height:100% !important;">';
+    for (let i = 0; i < config.tutorial.length; i += 1) {
+      let tutorialModalItemNextButtonText = 'Next';
+      if ('nextButton' in config.tutorial[i]) {
+        tutorialModalItemNextButtonText = config.tutorial[i].nextButton;
+      }
+
+      // create the item
+      let tutorialModalItem;
+      if (i === 0) { // Case 1: First Item in the Modal
+        tutorialModalItem = `<div class="carousel-item blue-grey lighten-3 black-text" href="#tutorial-item-${i}!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">${config.tutorial[i].title}</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="${config.tutorial[i].img}" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">${config.tutorial[i].body}</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-next">${tutorialModalItemNextButtonText}</button></div>`;
+      } else if (i === config.tutorial.length - 1) { // Case 2: Last Item in the Modal
+        tutorialModalItem = `<div class="carousel-item blue-grey lighten-3 black-text" href="#tutorial-item-${i}!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">${config.tutorial[i].title}</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="${config.tutorial[i].img}" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">${config.tutorial[i].body}</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-close">${tutorialModalItemNextButtonText}</button></div>`;
+      } else { // Case 3: Somewhere in the middle.
+        tutorialModalItem = `<div class="carousel-item blue-grey lighten-3 black-text" href="#tutorial-item-${i}!"><div style="margin-top: 15px;"><h2 style="font-size: 32px;font-weight:600;">${config.tutorial[i].title}</h2></div><hr class="tutorial-hr"/><p class="white-text"><img class="tutorial-img" src="${config.tutorial[i].img}" style="border: 1px solid black;"></p><div class="black-text" style="width: 70%;margin:0 auto;">${config.tutorial[i].body}</div><hr class="tutorial-hr"/><button class="waves-light btn tutorial-btn-prev">Back</button><button class="waves-light btn tutorial-btn-next">${tutorialModalItemNextButtonText}</button></div>`;
+      }
+
+      // append the item
+      tutorialModal += tutorialModalItem;
+    }
+    tutorialModal += '</div></div></div>';
+    modalsTemplate += tutorialModal;
+  }
+
   // before we start appending, check the mode to insert the right label space replacement.
-  if (config.mode.toLowerCase() == 'transcription') {
+  if (config.mode.toLowerCase() === 'transcription') {
     if ('language' in config) {
-      if (config.language.toLowerCase() == 'greek') {
+      if (config.language.toLowerCase() === 'greek') {
         annotationSurfaceTemplate = annotationSurfaceTemplate.replace('{LABEL_SPACE}', keypad_template_greek);
       } else {
-        annotationSurfaceTemplate = annotationSurfaceTelate.replace('{LABEL_SPACE}', 'ERROR: Unsupported language.');
+        annotationSurfaceTemplate = annotationSurfaceTemplate.replace('{LABEL_SPACE}', 'ERROR: Unsupported language.');
       }
     } else {
       annotationSurfaceTemplate = annotationSurfaceTemplate.replace('{LABEL_SPACE}', 'ERROR: No language specified.');
@@ -789,37 +902,58 @@ ImageAnnotator.prototype.render = function (config) {
   parent_container.append(stateVariables);
   parent_container.append(toggleControlTemplate);
   parent_container.append(annotationSurfaceTemplate);
+  parent_container.append(rightActionPanel);
 
+  const blockPanel = $('#right-action-panel');
 
   // check for practice
   if ('practice' in config) {
     if (config.practice.active) {
       // append the practice window
-      parent_container.append(practiceWindowTemplate);
+      blockPanel.append(practiceWindowTemplate);
     }
   }
 
-  // append next button div
-  parent_container.append(nextWindowTemplate);
-  config.next_button = 'hidden';
+  // has the user switched already?
+  const alreadySwitched = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-task-switch`);
+  if ('task_switch' in config) {
+    if (!alreadySwitched) {
+      if (config.task_switch === 'user-controlled') {
+        blockPanel.append(queueSwitchUserTriggeredWindowTemplate);
+      } else if (config.task_switch === 'system-controlled') {
+        blockPanel.append(queueSwitchSystemTriggeredWindowTemplate);
+      }
+    }
+  }
+
+  // config.next_button = 'hidden';
   // check if the next button needs to be shown
   if ('next_button' in config) {
-    if (config.next_button.toLowerCase() === 'hidden') {
-      $('#submission_toggles').hide();
+    if (config.next_button.toLowerCase() === 'with-questions') {
+      blockPanel.append(nextWindowWithQuestionsTemplate);
+    } else if (config.next_button.toLowerCase() === 'system-controlled') {
+      blockPanel.append(nextWindowBotTemplate);
+    } else if (config.next_button.toLowerCase() === 'default') {
+      blockPanel.append(nextWindowTemplate);
     }
+  } else {
+    blockPanel.append(nextWindowTemplate);
   }
 
-  // handle the focus window
-  parent_container.append(focusWindowTemplate);
-  const priorFocus = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-focus`);
-  if (priorFocus) {
-    // update the element
-    const ele = $('#task-focus-text');
-    ele.html(`<i>${priorFocus}</i>`);
-    ele.addClass('active');
+  // handle the focus window if collaboration is active
+  if (config.collaboration) {
+    if (config.collaboration.active) {
+      const priorFocus = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-focus`);
+      if (priorFocus) {
+        // update the element
+        const ele = $('#task-focus-text-main');
+        ele.html(`<i>${priorFocus}</i>`);
+        ele.addClass('active');
 
-    // show the element
-    $('#focus_toggles').show();
+        // show the element
+        $('#focus_toggles').show();
+      }
+    }
   }
 
   parent_container.append(validatePracticeWindowTemplate);
@@ -890,11 +1024,31 @@ ImageAnnotator.prototype.render = function (config) {
     e.preventDefault();
     e.stopPropagation();
     that.modals.tutorial_modal.modal('close');
+
+    if (!('collaboration' in config)) {
+      that.unlockInterface();
+      window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-task-unlocked`, true);
+    }
+
     window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-seen-tutorial`, 'True');
     setTimeout(() => { // open the survey modal
       if (config.sampling) {
         that.modals.survey_efficacy_modal.modal('open');
       }
+      let tour = {
+        id: 'hello-hopscotch',
+        steps: [
+          {
+            title: 'Say Hi!',
+            content: 'Start the task by saying Hi to Rae.',
+            target: '#chats',
+            placement: 'left',
+          },
+        ],
+      };
+
+      // start the tour
+      hopscotch.startTour(tour);
     }, 500);
   });
 
@@ -954,79 +1108,6 @@ ImageAnnotator.prototype.render = function (config) {
 
   // open the loading modal
   this.modals.loading_modal.modal('open');
-};
-
-ImageAnnotator.prototype.loadTutorial = function (config) {
-  $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', 'https://curio-media.s3.amazonaws.com/css/introjs.css'));
-
-  // put steps together algorithmically
-  const steps = [
-    {
-      element: '#main-interface',
-      intro: '<b>Welcome!</b><p>Before you start counting, let us help you familiarize yourself with the interface.</p><p>Click "Next" to begin.</p>',
-    },
-    {
-      element: '#bottom-control-keypad',
-      intro: 'The <b><i>Counting Window</i></b> lets you select a particular label (i.e. Tau).',
-    },
-    {
-      element: '#tau-btn',
-      intro: 'Click here to begin counting Taus.',
-    },
-    {
-      element: '#primary_countingboard',
-      intro: "After clicking on a label, you'll see a few examples of what you're trying to count.",
-    },
-    {
-      element: '#viewer',
-      intro: 'To count a letter, click on the image to make an annotation. Each click will increase the count for the object. Try it!',
-    },
-    {
-      element: '#viewer',
-      intro: 'Annotations can be <b>moved</b> by clicking and dragging the annotation. Annotations can be <b>deleted</b> by clicking on the annotation twice and clicking the "Delete" button that appears.',
-    },
-    {
-      element: '#map',
-      intro: 'The <b><i>Map</i></b> shows the entire image. The shaded region shows what portion of the image is visible. You can <b>drag</b> the shaded region to change your view of the image. <p>Try moving the shaded region around!</p>',
-    },
-    {
-      element: '#toggles',
-      intro: 'The <b>View</b> toggle allows you to <b>fullscreen</b> the interface and hide the minimap.',
-    },
-  ];
-
-
-  if ('practice' in config) {
-    if (config.practice.active) {
-      // append the practice window
-      steps.push({
-        element: '#practice_toggles',
-        intro: 'The Practice Room lets you try tasks and get feedback on what was correct or incorrect. You can start practicing at any point during the task.',
-      });
-    }
-  }
-
-  steps.push({
-    element: '#submission_toggles',
-    intro: "After you've counted the objects, you can click the Arrow button, which will give you the next image.<p><b>Click \"Done\"</i> to begin counting this image!</b></p>",
-  });
-
-  // check if the
-  const intro = IntroJS.introJs();
-  intro.setOptions({
-    exitOnOverlayClick: false,
-    steps,
-  });
-
-  // add a handler for completing the tutorial
-  const that = this;
-  intro.oncomplete(() => {
-    window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-seen-tutorial`, 'True');
-    setTimeout(() => { that.modals.survey_efficacy_modal.modal('open'); }, 500);
-  });
-
-  // start the tutorial
-  // intro.start();
 };
 
 /**
@@ -1140,6 +1221,9 @@ ImageAnnotator.prototype.resetSurface = function () {
   $('#zoom').val('1.00');
   surface.mode = 'issues';
   surface.selection = null;
+
+  // reset the confidence form
+  $('#confidenceTextArea').val('');
 };
 
 ImageAnnotator.prototype.toggleColourMenu = function (event, forceHide) {
@@ -1469,7 +1553,7 @@ ImageAnnotator.prototype.deleteTool = function (e) {
     that.client.delete('annotation', {
       id: annotation_id,
     }, (annotation) => {
-      print('Annotation (' + annotation_id + ') deleted successfully.');
+      print(`Annotation (${annotation_id}) deleted successfully.`);
     });
   } else if (this.mode === 'transcription') {
     $('#markers .selected').each(function (i, m) {
@@ -1484,7 +1568,7 @@ ImageAnnotator.prototype.deleteTool = function (e) {
       that.client.delete('annotation', {
         id: annotation_id,
       }, (annotation) => {
-        print('Annotation (' + annotation_id + ') deleted successfully.');
+        print(`Annotation (${annotation_id}) deleted successfully.`);
       });
     });
   }
@@ -2723,10 +2807,10 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
   const focus_toggles = $('#focus_toggles');
   const focus_toggles_inner = $('#focus_toggles_inner');
   const primary_countingboard = $('#primary_countingboard');
-  const fixed_pane = $('.right-hand-fixed-pane');
   const chat_window = $('#chats');
   const task_counter = $('#task-counter');
   const footer = $('.page-footer');
+  const rightActionPanel = $('#right-action-panel');
 
   if (main_interface.hasClass('fullscreen')) {
     main_interface.removeClass('fullscreen');
@@ -2752,7 +2836,7 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     focus_toggles_inner.removeClass('fullscreen');
     chat_window.removeClass('fullscreen');
     task_counter.removeClass('fullscreen');
-    fixed_pane.removeClass('fullscreen');
+    rightActionPanel.removeClass('fullscreen');
     crowdcurio_nav_bar.show();
     footer.show();
   } else {
@@ -2779,7 +2863,7 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     focus_toggles_inner.addClass('fullscreen');
     chat_window.addClass('fullscreen');
     task_counter.addClass('fullscreen');
-    fixed_pane.addClass('fullscreen');
+    rightActionPanel.addClass('fullscreen');
     crowdcurio_nav_bar.hide();
     footer.hide();
   }
@@ -2930,10 +3014,10 @@ ImageAnnotator.prototype.loadState = function (state) {
 
   // figure out the color of each label
   /* get selected label */
-  let labels = {};
-  let labelCounts = {};
-  print("Checking labels ..")
-  $('.task-option-toggle').each(function(idx, ele){
+  const labels = {};
+  const labelCounts = {};
+  print('Checking labels ..');
+  $('.task-option-toggle').each(function (idx, ele) {
     // get the label and lval from the element
     const label = $(this).attr('id').split('-')[0];
     const lval = $(this).attr('lval');
@@ -2941,7 +3025,7 @@ ImageAnnotator.prototype.loadState = function (state) {
     labelCounts[label] = 0;
   });
 
-  // iterate over the state 
+  // iterate over the state
   for (const idx in state) {
     if (state[idx].hasOwnProperty('position')) {
       const marker = state[idx];
@@ -2955,7 +3039,7 @@ ImageAnnotator.prototype.loadState = function (state) {
         newMarker = `<div annotation-id='${marker.id}' class='marker new ${labels[marker.label]}' id='m-${key}' style='left: ${marker.position.x - 10}px;top:${marker.position.y - 10}px;background:${$('#m_colour').val()};opacity:${$('#m_opacity').val()}'><div class='character'></div><div id='delete-marker-${key}' class='delete-marker-btn' style='display:none;'>Delete</div></div>`;
         labelCounts[marker.label] += 1;
       }
-      
+
       $('#markers').append(newMarker);
       $(`#m-${key}`).draggable({
         start(e) {
@@ -2972,11 +3056,11 @@ ImageAnnotator.prototype.loadState = function (state) {
   }
 
   // if we're counting, update the counting number
-  if(this.mode === 'counting'){
-    $('.task-option-toggle').each(function(idx, ele){
+  if (this.mode === 'counting') {
+    $('.task-option-toggle').each(function (idx, ele) {
       // get the label and lval from the element
       const label = $(this).attr('id').split('-')[0];
-      print("Setting: "+label+" to "+labelCounts[label]);
+      print(`Setting: ${label} to ${labelCounts[label]}`);
       console.log($(this).find('div'));
       $(this).find('div')[0].innerHTML = labelCounts[label];
     });
@@ -3290,17 +3374,12 @@ ImageAnnotator.prototype.calculateAccuracy = function (name) {
     false_positive_annotations += 1;
   }
 
-  // save a new event model
-  this.client.create('event', {
-    content: {
-      type: 'required-performance',
-      fp: false_positive_annotations,
-      tp: true_positive_annotations,
-      fn: false_negative_annotations,
-    },
-  }, () => {
-    print('Required Performance Event: Saved!');
-  });
+  // return a json object for precision / recall
+  return {
+    fp: false_positive_annotations,
+    tp: true_positive_annotations,
+    fn: false_negative_annotations,
+  };
 };
 
 
@@ -3373,50 +3452,17 @@ ImageAnnotator.prototype.handleInterfaceUpdateSave = function (event) {
   Materialize.toast('Tate created an annotation.', 3000, 'rounded');
 };
 
-/**
- * Handles DELETE events made on annotations.
- * @param {*Object} event : broadcasted event from the Collaboration app.
- */
-ImageAnnotator.prototype.handleInterfaceUpdateDelete = function (event) {
-  const annotation_id = event.payload.annotation.id;
-  $(`div[annotation-id="${annotation_id}"`).remove();
-};
-
-/**
- * Handles force task-switch events.
- * @param {*Object} event : broadcasted event from the Collaboration app.
- */
-ImageAnnotator.prototype.handleInterfaceForcedTaskSwitch = function (event) {
-  // $('#next-button').click();
-};
-
-
-/**
- * Handles focus-setting events.
- * @param {*Object} event : broadcasted event from the Collaboration app.
- */
-ImageAnnotator.prototype.handleInterfaceTaskSetFocus = function (event) {
-  // update the element
-  const ele = $('#task-focus-text');
-  ele.html(`<i>${event.payload.event.focus}</i>`);
-  ele.addClass('active');
-
-  // save the focus in local storage
-  window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-focus`, event.payload.event.focus);
-  ele.fadeIn();
-};
-
-/**
- * Handles switching task queues.
- * @param {*Object} event : broadcasted event from the Collaboration app.
- */
-ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
+ImageAnnotator.prototype.switchTaskQueues = function (queueName) {
   const that = surface;
+
   // update the current queue
-  that.currentQueue = event.payload.event.queueName;
+  that.currentQueue = queueName;
 
   // close the modal
   that.modals.fetching_task_modal.modal('open');
+
+  // hide the task swithc container
+  $('#queue-switch-container').fadeOut();
 
   // hide the map
   $('#map').fadeOut();
@@ -3435,13 +3481,26 @@ ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
     global.oImg.src = task.url;
     $('.subject').attr('src', task.url);
 
-    // update the state of the task session
-    that.client.update('tasksession', {
-      id: that.client.task_session.task_session,
-      channel_name: that.client.task_session.channel_name,
-      data: { type: 'Data', id: task.id },
+    if (that.collaboration) {
+      // update the state of the task session
+      that.client.update('tasksession', {
+        id: that.client.task_session.task_session,
+        channel_name: that.client.task_session.channel_name,
+        data: { type: 'Data', id: task.id },
+      }, () => {
+        // print("Task session updated.")
+      });
+    }
+
+    // save a new event model
+    that.client.create('event', {
+      content: {
+        type: 'queue-switch',
+        queue: queueName,
+        completedTasks: that.completedTasks,
+      },
     }, () => {
-      // print("Task session updated.")
+      print('QueueSwitch: Saved!');
     });
 
     // hide the map
@@ -3452,13 +3511,89 @@ ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
   });
 
   // save the focus in local storage
-  window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-task-switch`, event.payload.event.queueName);
+  window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-task-switch`, queueName);
+};
+
+/**
+ * Handles DELETE events made on annotations.
+ * @param {*Object} event : broadcasted event from the Collaboration app.
+ */
+ImageAnnotator.prototype.handleInterfaceUpdateDelete = function (event) {
+  const annotation_id = event.payload.annotation.id;
+  $(`div[annotation-id="${annotation_id}"`).remove();
+};
+
+/**
+ * Handles force task-switch events.
+ * @param {*Object} event : broadcasted event from the Collaboration app.
+ */
+ImageAnnotator.prototype.handleInterfaceForcedNextTask = function (event) {
+  ms.onNextTask();
+};
+
+
+/**
+ * Handles focus-setting events.
+ * @param {*Object} event : broadcasted event from the Collaboration app.
+ */
+ImageAnnotator.prototype.handleInterfaceTaskSetFocus = function (event) {
+  if (event.payload.event.focus === 'test') {
+    // update the element
+    const ele = $('#focus_toggles');
+    ele.html('<i>Here\'s where your focus will appear.</i>');
+    ele.addClass('active');
+
+    setTimeout(() => {
+      ele.fadeOut();
+      ele.removeClass('active');
+    }, 8000);
+  } else {
+    // update the element
+    const ele = $('#focus_toggles');
+    ele.html(`Focus On: <i>${event.payload.event.focus}</i>`);
+    ele.addClass('active');
+
+    // save the focus in local storage
+    window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-focus`, event.payload.event.focus);
+    ele.fadeIn();
+  }
+};
+
+/**
+ * Handles switching task queues.
+ * @param {*Object} event : broadcasted event from the Collaboration app.
+ */
+ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
+  surface.switchTaskQueues(event.payload.event.queueName);
+};
+
+/**
+ * Handles events for user presence updates.
+ * @param {Object} event 
+ */
+ImageAnnotator.prototype.handleInterfaceUserJoin = function (event) {
+  // redistribute the data object
+  if(ms.data.id === undefined){
+    // We need to wait to send.
+    setTimeout(function(){
+      ms.handleInterfaceUserJoin(event);
+    }, 1000);
+  } else {
+    // We're ready to send.
+    ms.client.update('tasksession', {
+      id: ms.client.task_session.task_session,
+      channel_name: ms.client.task_session.channel_name,
+      data: { type: 'Data', id: ms.data.id },
+    }, () => {
+      print(`Data State Updated: ID ${ms.data.id}`);
+    });
+  }
 };
 
 module.exports = ImageAnnotator;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./../models/marker":4,"./../utils/guid-generator":5,"./../utils/print":6,"./../utils/timer":7,"./image-mini-map":2,"crowdcurio-client":8,"hammerjs":11,"intro.js":12,"jquery":15,"materialize-css":16,"rangeslider.js":20}],2:[function(require,module,exports){
+},{"./../models/marker":4,"./../utils/guid-generator":5,"./../utils/print":6,"./../utils/timer":7,"./image-mini-map":2,"crowdcurio-client":8,"hammerjs":11,"hopscotch":12,"jquery":15,"materialize-css":16,"rangeslider.js":20,"sweetalert":22}],2:[function(require,module,exports){
 /*      file:       papyri-mini-map.js
         author:     alex c. williams
         description:
@@ -3775,17 +3910,21 @@ function Timer() {
   this.ElapsedMilliseconds = 0;
 }
 
-Timer.prototype.startTimer = function () {
+Timer.prototype.start = function () {
   this.StartMilliseconds = new Date().getTime();
 };
 
-Timer.prototype.stopTimer = function () {
+Timer.prototype.stop = function () {
   this.ElapsedMilliseconds = new Date().getTime() - this.StartMilliseconds;
 };
 
 Timer.prototype.reset = function () {
   this.StartMilliseconds = 0;
   this.ElapsedMilliseconds = 0;
+};
+
+Timer.prototype.getTime = function () {
+  return this.ElapsedMilliseconds;
 };
 
 module.exports = Timer;
@@ -3888,6 +4027,15 @@ CrowdCurioClient.prototype.getNextTask = function(queue_type, callback){
 // delete is supported for all models
 CrowdCurioClient.prototype.create = function(model, params, callback){
     var that = this;
+
+    // handle annotations made outside of a task session
+    var tsInstance = null;
+    if(that.task_session){
+        if(that.task_session.task_session){
+            tsInstance = {id: that.task_session.task_session, type: 'TaskSession'};
+        }
+    }
+
     // extend params by adding relations
     if(model === 'response'){
         params = jQuery.extend({
@@ -3910,7 +4058,7 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
             task: that.task,
             experiment: that.experiment,
             condition: that.condition,
-            task_session: {id: that.task_session.task_session, type: 'TaskSession'},
+            task_session: tsInstance,
             updated_by: that.user
         }, params);
     }
@@ -4187,6 +4335,9 @@ TaskSession.prototype.init = function(params) {
         that.handleInterfaceActionTaskQueueSwitch = function(event){
             print("ERROR: Can't handle transmitted Inteface TaskQueueSwitch event. (E: "+event+" )");
         }
+        that.handleInterfaceActionUserJoin = function(event){
+            print("ERROR: Can't handle transmitted Inteface User Join event. (E: "+event+" )");
+        }
 
         // fetch the task policy
         that.fetchPolicy().then(function(policy){
@@ -4244,6 +4395,9 @@ TaskSession.prototype.setListeners = function(obj){
     }
     if('taskQueueSwitch' in obj && typeof obj['taskQueueSwitch'] === "function"){
         this.handleInterfaceActionTaskQueueSwitch = obj['taskQueueSwitch'];
+    }
+    if('onUserJoin' in obj && typeof obj['onUserJoin'] === "function"){
+        this.handleInterfaceActionUserJoin = obj['onUserJoin'];
     }
 };
 
@@ -4345,7 +4499,7 @@ TaskSession.prototype.fetchPolicy = function(){
  */
 TaskSession.prototype.connect = function(roomId){
     var parent_ele = $('.chat-container');
-    if(!parent_ele){
+    if(parent_ele.length === 0){
         parent_ele = $("#task-container");
     }
     parent_ele.append('<div id="chats" class="chats-div"></div>');
@@ -4633,6 +4787,7 @@ TaskSession.prototype.connect = function(roomId){
                 case 6: // Server is updating us with active users in session
                     that.userList = data;
                     updateUserList();
+                    that.handleInterfaceActionUserJoin(data);
                     return;
                 case 9:
                     that.handleInterfaceActionSave(data);
@@ -7371,2161 +7526,23 @@ if (typeof define === 'function' && define.amd) {
 })(window, document, 'Hammer');
 
 },{}],12:[function(require,module,exports){
-/**
- * Intro.js v2.8.0-alpha.1
- * https://github.com/usablica/intro.js
- *
- * Copyright (C) 2017 Afshin Mehrabani (@afshinmeh)
- */
-
-(function (root, factory) {
-  if (typeof exports === 'object') {
-    // CommonJS
-    factory(exports);
-  } else if (typeof define === 'function' && define.amd) {
-    // AMD. Register as an anonymous module.
-    define(['exports'], factory);
-  } else {
-    // Browser globals
-    factory(root);
-  }
-} (this, function (exports) {
-  //Default config/variables
-  var VERSION = '2.8.0-alpha.1';
-
-  /**
-   * IntroJs main class
-   *
-   * @class IntroJs
-   */
-  function IntroJs(obj) {
-    this._targetElement = obj;
-    this._introItems = [];
-
-    this._options = {
-      /* Next button label in tooltip box */
-      nextLabel: 'Next &rarr;',
-      /* Previous button label in tooltip box */
-      prevLabel: '&larr; Back',
-      /* Skip button label in tooltip box */
-      skipLabel: 'Skip',
-      /* Done button label in tooltip box */
-      doneLabel: 'Done',
-      /* Hide previous button in the first step? Otherwise, it will be disabled button. */
-      hidePrev: false,
-      /* Hide next button in the last step? Otherwise, it will be disabled button. */
-      hideNext: false,
-      /* Default tooltip box position */
-      tooltipPosition: 'bottom',
-      /* Next CSS class for tooltip boxes */
-      tooltipClass: '',
-      /* CSS class that is added to the helperLayer */
-      highlightClass: '',
-      /* Close introduction when pressing Escape button? */
-      exitOnEsc: true,
-      /* Close introduction when clicking on overlay layer? */
-      exitOnOverlayClick: true,
-      /* Show step numbers in introduction? */
-      showStepNumbers: true,
-      /* Let user use keyboard to navigate the tour? */
-      keyboardNavigation: true,
-      /* Show tour control buttons? */
-      showButtons: true,
-      /* Show tour bullets? */
-      showBullets: true,
-      /* Show tour progress? */
-      showProgress: false,
-      /* Scroll to highlighted element? */
-      scrollToElement: true,
-      /*
-       * Should we scroll the tooltip or target element?
-       *
-       * Options are: 'element' or 'tooltip'
-       */
-      scrollTo: 'element',
-      /* Padding to add after scrolling when element is not in the viewport (in pixels) */
-      scrollPadding: 30,
-      /* Set the overlay opacity */
-      overlayOpacity: 0.8,
-      /* Precedence of positions, when auto is enabled */
-      positionPrecedence: ["bottom", "top", "right", "left"],
-      /* Disable an interaction with element? */
-      disableInteraction: false,
-      /* Default hint position */
-      hintPosition: 'top-middle',
-      /* Hint button label */
-      hintButtonLabel: 'Got it',
-      /* Adding animation to hints? */
-      hintAnimation: true
-    };
-  }
-
-  /**
-   * Initiate a new introduction/guide from an element in the page
-   *
-   * @api private
-   * @method _introForElement
-   * @param {Object} targetElm
-   * @returns {Boolean} Success or not?
-   */
-  function _introForElement(targetElm) {
-    var introItems = [],
-        self = this;
-
-    if (this._options.steps) {
-      //use steps passed programmatically
-      for (var i = 0, stepsLength = this._options.steps.length; i < stepsLength; i++) {
-        var currentItem = _cloneObject(this._options.steps[i]);
-
-        //set the step
-        currentItem.step = introItems.length + 1;
-
-        //use querySelector function only when developer used CSS selector
-        if (typeof (currentItem.element) === 'string') {
-          //grab the element with given selector from the page
-          currentItem.element = document.querySelector(currentItem.element);
-        }
-
-        //intro without element
-        if (typeof (currentItem.element) === 'undefined' || currentItem.element == null) {
-          var floatingElementQuery = document.querySelector(".introjsFloatingElement");
-
-          if (floatingElementQuery == null) {
-            floatingElementQuery = document.createElement('div');
-            floatingElementQuery.className = 'introjsFloatingElement';
-
-            document.body.appendChild(floatingElementQuery);
-          }
-
-          currentItem.element  = floatingElementQuery;
-          currentItem.position = 'floating';
-        }
-
-        currentItem.scrollTo = currentItem.scrollTo || this._options.scrollTo;
-
-        if (typeof (currentItem.disableInteraction) === 'undefined') {
-          currentItem.disableInteraction = this._options.disableInteraction;
-        }
-
-        if (currentItem.element != null) {
-          introItems.push(currentItem);
-        }
-      }
-
-    } else {
-      //use steps from data-* annotations
-      var allIntroSteps = targetElm.querySelectorAll('*[data-intro]');
-      //if there's no element to intro
-      if (allIntroSteps.length < 1) {
-        return false;
-      }
-
-      //first add intro items with data-step
-      for (var i = 0, elmsLength = allIntroSteps.length; i < elmsLength; i++) {
-        var currentElement = allIntroSteps[i];
-
-        // skip hidden elements
-        if (currentElement.style.display == 'none') {
-          continue;
-        }
-
-        var step = parseInt(currentElement.getAttribute('data-step'), 10);
-
-        var disableInteraction = this._options.disableInteraction;
-
-        if (typeof (currentElement.getAttribute('data-disable-interaction')) != 'undefined') {
-          disableInteraction = !!currentElement.getAttribute('data-disable-interaction');
-        }
-
-        if (step > 0) {
-          introItems[step - 1] = {
-            element: currentElement,
-            intro: currentElement.getAttribute('data-intro'),
-            step: parseInt(currentElement.getAttribute('data-step'), 10),
-            tooltipClass: currentElement.getAttribute('data-tooltipClass'),
-            highlightClass: currentElement.getAttribute('data-highlightClass'),
-            position: currentElement.getAttribute('data-position') || this._options.tooltipPosition,
-            scrollTo: currentElement.getAttribute('data-scrollTo') || this._options.scrollTo,
-            disableInteraction: disableInteraction
-          };
-        }
-      }
-
-      //next add intro items without data-step
-      //todo: we need a cleanup here, two loops are redundant
-      var nextStep = 0;
-      for (var i = 0, elmsLength = allIntroSteps.length; i < elmsLength; i++) {
-        var currentElement = allIntroSteps[i];
-
-        if (currentElement.getAttribute('data-step') == null) {
-
-          while (true) {
-            if (typeof introItems[nextStep] == 'undefined') {
-              break;
-            } else {
-              nextStep++;
-            }
-          }
-
-          var disableInteraction = this._options.disableInteraction;
-
-          if (typeof (currentElement.getAttribute('data-disable-interaction')) != 'undefined') {
-            disableInteraction = !!currentElement.getAttribute('data-disable-interaction');
-          }
-
-          introItems[nextStep] = {
-            element: currentElement,
-            intro: currentElement.getAttribute('data-intro'),
-            step: nextStep + 1,
-            tooltipClass: currentElement.getAttribute('data-tooltipClass'),
-            highlightClass: currentElement.getAttribute('data-highlightClass'),
-            position: currentElement.getAttribute('data-position') || this._options.tooltipPosition,
-            scrollTo: currentElement.getAttribute('data-scrollTo') || this._options.scrollTo,
-            disableInteraction: disableInteraction
-          };
-        }
-      }
-    }
-
-    //removing undefined/null elements
-    var tempIntroItems = [];
-    for (var z = 0; z < introItems.length; z++) {
-      introItems[z] && tempIntroItems.push(introItems[z]);  // copy non-empty values to the end of the array
-    }
-
-    introItems = tempIntroItems;
-
-    //Ok, sort all items with given steps
-    introItems.sort(function (a, b) {
-      return a.step - b.step;
-    });
-
-    //set it to the introJs object
-    self._introItems = introItems;
-
-    //add overlay layer to the page
-    if(_addOverlayLayer.call(self, targetElm)) {
-      //then, start the show
-      _nextStep.call(self);
-
-      var skipButton     = targetElm.querySelector('.introjs-skipbutton'),
-          nextStepButton = targetElm.querySelector('.introjs-nextbutton');
-
-      self._onKeyDown = function(e) {
-        if (e.keyCode === 27 && self._options.exitOnEsc == true) {
-          //escape key pressed, exit the intro
-          //check if exit callback is defined
-          _exitIntro.call(self, targetElm);
-        } else if(e.keyCode === 37) {
-          //left arrow
-          _previousStep.call(self);
-        } else if (e.keyCode === 39) {
-          //right arrow
-          _nextStep.call(self);
-        } else if (e.keyCode === 13) {
-          //srcElement === ie
-          var target = e.target || e.srcElement;
-          if (target && target.className.indexOf('introjs-prevbutton') > 0) {
-            //user hit enter while focusing on previous button
-            _previousStep.call(self);
-          } else if (target && target.className.indexOf('introjs-skipbutton') > 0) {
-            //user hit enter while focusing on skip button
-            if (self._introItems.length - 1 == self._currentStep && typeof (self._introCompleteCallback) === 'function') {
-                self._introCompleteCallback.call(self);
-            }
-
-            _exitIntro.call(self, targetElm);
-          } else {
-            //default behavior for responding to enter
-            _nextStep.call(self);
-          }
-
-          //prevent default behaviour on hitting Enter, to prevent steps being skipped in some browsers
-          if(e.preventDefault) {
-            e.preventDefault();
-          } else {
-            e.returnValue = false;
-          }
-        }
-      };
-
-      self._onResize = function(e) {
-        self.refresh.call(self);
-      };
-
-      if (window.addEventListener) {
-        if (this._options.keyboardNavigation) {
-          window.addEventListener('keydown', self._onKeyDown, true);
-        }
-        //for window resize
-        window.addEventListener('resize', self._onResize, true);
-      } else if (document.attachEvent) { //IE
-        if (this._options.keyboardNavigation) {
-          document.attachEvent('onkeydown', self._onKeyDown);
-        }
-        //for window resize
-        document.attachEvent('onresize', self._onResize);
-      }
-    }
-    return false;
-  }
-
- /*
-   * makes a copy of the object
-   * @api private
-   * @method _cloneObject
-  */
-  function _cloneObject(object) {
-      if (object == null || typeof (object) != 'object' || typeof (object.nodeType) != 'undefined') {
-        return object;
-      }
-      var temp = {};
-      for (var key in object) {
-        if (typeof (jQuery) != 'undefined' && object[key] instanceof jQuery) {
-          temp[key] = object[key];
-        } else {
-          temp[key] = _cloneObject(object[key]);
-        }
-      }
-      return temp;
-  }
-  /**
-   * Go to specific step of introduction
-   *
-   * @api private
-   * @method _goToStep
-   */
-  function _goToStep(step) {
-    //because steps starts with zero
-    this._currentStep = step - 2;
-    if (typeof (this._introItems) !== 'undefined') {
-      _nextStep.call(this);
-    }
-  }
-
-  /**
-   * Go to the specific step of introduction with the explicit [data-step] number
-   *
-   * @api private
-   * @method _goToStepNumber
-   */
-  function _goToStepNumber(step) {
-    this._currentStepNumber = step;
-    if (typeof (this._introItems) !== 'undefined') {
-      _nextStep.call(this);
-    }
-  }
-
-  /**
-   * Go to next step on intro
-   *
-   * @api private
-   * @method _nextStep
-   */
-  function _nextStep() {
-    this._direction = 'forward';
-
-    if (typeof (this._currentStepNumber) !== 'undefined') {
-        for( var i = 0, len = this._introItems.length; i < len; i++ ) {
-            var item = this._introItems[i];
-            if( item.step === this._currentStepNumber ) {
-                this._currentStep = i - 1;
-                this._currentStepNumber = undefined;
-            }
-        }
-    }
-
-    if (typeof (this._currentStep) === 'undefined') {
-      this._currentStep = 0;
-    } else {
-      ++this._currentStep;
-    }
-
-    if (typeof (this._introBeforeChangeCallback) !== 'undefined') {
-      var continueStep = this._introBeforeChangeCallback.call(this);
-    }
-
-    // if `onbeforechange` returned `false`, stop displaying the element
-    if (continueStep === false) {
-      --this._currentStep;
-      return false;
-    } 
-
-    if ((this._introItems.length) <= this._currentStep) {
-      //end of the intro
-      //check if any callback is defined
-      if (typeof (this._introCompleteCallback) === 'function') {
-        this._introCompleteCallback.call(this);
-      }
-      _exitIntro.call(this, this._targetElement);
-      return;
-    }
-
-    var nextStep = this._introItems[this._currentStep];
-    _showElement.call(this, nextStep);
-  }
-
-  /**
-   * Go to previous step on intro
-   *
-   * @api private
-   * @method _previousStep
-   */
-  function _previousStep() {
-    this._direction = 'backward';
-
-    if (this._currentStep === 0) {
-      return false;
-    }
-
-    --this._currentStep;
-
-    if (typeof (this._introBeforeChangeCallback) !== 'undefined') {
-      var continueStep = this._introBeforeChangeCallback.call(this);
-    }
-
-    // if `onbeforechange` returned `false`, stop displaying the element
-    if (continueStep === false) {
-      ++this._currentStep;
-      return false;
-    }
-
-    var nextStep = this._introItems[this._currentStep];
-    _showElement.call(this, nextStep);
-  }
-
-  /**
-   * Update placement of the intro objects on the screen
-   * @api private
-   */
-  function _refresh() {
-    // re-align intros
-    _setHelperLayerPosition.call(this, document.querySelector('.introjs-helperLayer'));
-    _setHelperLayerPosition.call(this, document.querySelector('.introjs-tooltipReferenceLayer'));
-    _setHelperLayerPosition.call(this, document.querySelector('.introjs-disableInteraction'));
-
-    // re-align tooltip
-    if(this._currentStep !== undefined && this._currentStep !== null) {
-      var oldHelperNumberLayer = document.querySelector('.introjs-helperNumberLayer'),
-        oldArrowLayer        = document.querySelector('.introjs-arrow'),
-        oldtooltipContainer  = document.querySelector('.introjs-tooltip');
-      _placeTooltip.call(this, this._introItems[this._currentStep].element, oldtooltipContainer, oldArrowLayer, oldHelperNumberLayer);
-    }
-
-    //re-align hints
-    _reAlignHints.call(this);
-    return this;
-  }
-
-  /**
-   * Exit from intro
-   *
-   * @api private
-   * @method _exitIntro
-   * @param {Object} targetElement
-   * @param {Boolean} force - Setting to `true` will skip the result of beforeExit callback
-   */
-  function _exitIntro(targetElement, force) {
-    var continueExit = true;
-
-    // calling onbeforeexit callback
-    // 
-    // If this callback return `false`, it would halt the process
-    if (this._introBeforeExitCallback != undefined) {
-      continueExit = this._introBeforeExitCallback.call(self);
-    }
-
-    // skip this check if `force` parameter is `true`
-    // otherwise, if `onbeforeexit` returned `false`, don't exit the intro
-    if (!force && continueExit === false) return;
-
-    //remove overlay layers from the page
-    var overlayLayers = targetElement.querySelectorAll('.introjs-overlay');
-
-    if (overlayLayers && overlayLayers.length > 0) {
-      for (var i = overlayLayers.length - 1; i >= 0; i--) {
-        //for fade-out animation
-        var overlayLayer = overlayLayers[i];
-        overlayLayer.style.opacity = 0;
-        setTimeout(function () {
-          if (this.parentNode) {
-            this.parentNode.removeChild(this);
-          }
-        }.bind(overlayLayer), 500);
-      };
-    }
-
-    //remove all helper layers
-    var helperLayer = targetElement.querySelector('.introjs-helperLayer');
-    if (helperLayer) {
-      helperLayer.parentNode.removeChild(helperLayer);
-    }
-
-    var referenceLayer = targetElement.querySelector('.introjs-tooltipReferenceLayer');
-    if (referenceLayer) {
-      referenceLayer.parentNode.removeChild(referenceLayer);
-    }
-
-    //remove disableInteractionLayer
-    var disableInteractionLayer = targetElement.querySelector('.introjs-disableInteraction');
-    if (disableInteractionLayer) {
-      disableInteractionLayer.parentNode.removeChild(disableInteractionLayer);
-    }
-
-    //remove intro floating element
-    var floatingElement = document.querySelector('.introjsFloatingElement');
-    if (floatingElement) {
-      floatingElement.parentNode.removeChild(floatingElement);
-    }
-
-    _removeShowElement();
-
-    //remove `introjs-fixParent` class from the elements
-    var fixParents = document.querySelectorAll('.introjs-fixParent');
-    if (fixParents && fixParents.length > 0) {
-      for (var i = fixParents.length - 1; i >= 0; i--) {
-        fixParents[i].className = fixParents[i].className.replace(/introjs-fixParent/g, '').replace(/^\s+|\s+$/g, '');
-      }
-    }
-
-    //clean listeners
-    if (window.removeEventListener) {
-      window.removeEventListener('keydown', this._onKeyDown, true);
-    } else if (document.detachEvent) { //IE
-      document.detachEvent('onkeydown', this._onKeyDown);
-    }
-
-    //check if any callback is defined
-    if (this._introExitCallback != undefined) {
-      this._introExitCallback.call(self);
-    }
-
-    //set the step to zero
-    this._currentStep = undefined;
-  }
-
-  /**
-   * Render tooltip box in the page
-   *
-   * @api private
-   * @method _placeTooltip
-   * @param {HTMLElement} targetElement
-   * @param {HTMLElement} tooltipLayer
-   * @param {HTMLElement} arrowLayer
-   * @param {HTMLElement} helperNumberLayer
-   * @param {Boolean} hintMode
-   */
-  function _placeTooltip(targetElement, tooltipLayer, arrowLayer, helperNumberLayer, hintMode) {
-    var tooltipCssClass = '',
-        currentStepObj,
-        tooltipOffset,
-        targetOffset,
-        windowSize,
-        currentTooltipPosition;
-
-    hintMode = hintMode || false;
-
-    //reset the old style
-    tooltipLayer.style.top        = null;
-    tooltipLayer.style.right      = null;
-    tooltipLayer.style.bottom     = null;
-    tooltipLayer.style.left       = null;
-    tooltipLayer.style.marginLeft = null;
-    tooltipLayer.style.marginTop  = null;
-
-    arrowLayer.style.display = 'inherit';
-
-    if (typeof(helperNumberLayer) != 'undefined' && helperNumberLayer != null) {
-      helperNumberLayer.style.top  = null;
-      helperNumberLayer.style.left = null;
-    }
-
-    //prevent error when `this._currentStep` is undefined
-    if (!this._introItems[this._currentStep]) return;
-
-    //if we have a custom css class for each step
-    currentStepObj = this._introItems[this._currentStep];
-    if (typeof (currentStepObj.tooltipClass) === 'string') {
-      tooltipCssClass = currentStepObj.tooltipClass;
-    } else {
-      tooltipCssClass = this._options.tooltipClass;
-    }
-
-    tooltipLayer.className = ('introjs-tooltip ' + tooltipCssClass).replace(/^\s+|\s+$/g, '');
-
-    currentTooltipPosition = this._introItems[this._currentStep].position;
-
-    if (currentTooltipPosition != "floating") { // Floating is always valid, no point in calculating
-      if (currentTooltipPosition === "auto") {
-        currentTooltipPosition = _determineAutoPosition.call(this, targetElement, tooltipLayer);
-      } else {
-        currentTooltipPosition = _determineAutoPosition.call(this, targetElement, tooltipLayer, currentTooltipPosition);
-      }
-    }
-
-    targetOffset  = _getOffset(targetElement);
-    tooltipOffset = _getOffset(tooltipLayer);
-    windowSize    = _getWinSize();
-
-    switch (currentTooltipPosition) {
-      case 'top':
-        arrowLayer.className = 'introjs-arrow bottom';
-
-        if (hintMode) {
-          var tooltipLayerStyleLeft = 0;
-        } else {
-          var tooltipLayerStyleLeft = 15;
-        }
-
-        _checkRight(targetOffset, tooltipLayerStyleLeft, tooltipOffset, windowSize, tooltipLayer);
-        tooltipLayer.style.bottom = (targetOffset.height +  20) + 'px';
-        break;
-      case 'right':
-        tooltipLayer.style.left = (targetOffset.width + 20) + 'px';
-        if (targetOffset.top + tooltipOffset.height > windowSize.height) {
-          // In this case, right would have fallen below the bottom of the screen.
-          // Modify so that the bottom of the tooltip connects with the target
-          arrowLayer.className = "introjs-arrow left-bottom";
-          tooltipLayer.style.top = "-" + (tooltipOffset.height - targetOffset.height - 20) + "px";
-        } else {
-          arrowLayer.className = 'introjs-arrow left';
-        }
-        break;
-      case 'left':
-        if (!hintMode && this._options.showStepNumbers == true) {
-          tooltipLayer.style.top = '15px';
-        }
-
-        if (targetOffset.top + tooltipOffset.height > windowSize.height) {
-          // In this case, left would have fallen below the bottom of the screen.
-          // Modify so that the bottom of the tooltip connects with the target
-          tooltipLayer.style.top = "-" + (tooltipOffset.height - targetOffset.height - 20) + "px";
-          arrowLayer.className = 'introjs-arrow right-bottom';
-        } else {
-          arrowLayer.className = 'introjs-arrow right';
-        }
-        tooltipLayer.style.right = (targetOffset.width + 20) + 'px';
-
-        break;
-      case 'floating':
-        arrowLayer.style.display = 'none';
-
-        //we have to adjust the top and left of layer manually for intro items without element
-        tooltipLayer.style.left   = '50%';
-        tooltipLayer.style.top    = '50%';
-        tooltipLayer.style.marginLeft = '-' + (tooltipOffset.width / 2)  + 'px';
-        tooltipLayer.style.marginTop  = '-' + (tooltipOffset.height / 2) + 'px';
-
-        if (typeof(helperNumberLayer) != 'undefined' && helperNumberLayer != null) {
-          helperNumberLayer.style.left = '-' + ((tooltipOffset.width / 2) + 18) + 'px';
-          helperNumberLayer.style.top  = '-' + ((tooltipOffset.height / 2) + 18) + 'px';
-        }
-
-        break;
-      case 'bottom-right-aligned':
-        arrowLayer.className      = 'introjs-arrow top-right';
-
-        var tooltipLayerStyleRight = 0;
-        _checkLeft(targetOffset, tooltipLayerStyleRight, tooltipOffset, tooltipLayer);
-        tooltipLayer.style.top    = (targetOffset.height +  20) + 'px';
-        break;
-
-      case 'bottom-middle-aligned':
-        arrowLayer.className      = 'introjs-arrow top-middle';
-
-        var tooltipLayerStyleLeftRight = targetOffset.width / 2 - tooltipOffset.width / 2;
-
-        // a fix for middle aligned hints
-        if (hintMode) {
-          tooltipLayerStyleLeftRight += 5;
-        }
-
-        if (_checkLeft(targetOffset, tooltipLayerStyleLeftRight, tooltipOffset, tooltipLayer)) {
-          tooltipLayer.style.right = null;
-          _checkRight(targetOffset, tooltipLayerStyleLeftRight, tooltipOffset, windowSize, tooltipLayer);
-        }
-        tooltipLayer.style.top = (targetOffset.height + 20) + 'px';
-        break;
-
-      case 'bottom-left-aligned':
-      // Bottom-left-aligned is the same as the default bottom
-      case 'bottom':
-      // Bottom going to follow the default behavior
-      default:
-        arrowLayer.className = 'introjs-arrow top';
-
-        var tooltipLayerStyleLeft = 0;
-        _checkRight(targetOffset, tooltipLayerStyleLeft, tooltipOffset, windowSize, tooltipLayer);
-        tooltipLayer.style.top    = (targetOffset.height +  20) + 'px';
-        break;
-    }
-  }
-
-  /**
-   * Set tooltip left so it doesn't go off the right side of the window
-   *
-   * @return boolean true, if tooltipLayerStyleLeft is ok.  false, otherwise.
-   */
-  function _checkRight(targetOffset, tooltipLayerStyleLeft, tooltipOffset, windowSize, tooltipLayer) {
-    if (targetOffset.left + tooltipLayerStyleLeft + tooltipOffset.width > windowSize.width) {
-      // off the right side of the window
-      tooltipLayer.style.left = (windowSize.width - tooltipOffset.width - targetOffset.left) + 'px';
-      return false;
-    }
-    tooltipLayer.style.left = tooltipLayerStyleLeft + 'px';
-    return true;
-  }
-
-  /**
-   * Set tooltip right so it doesn't go off the left side of the window
-   *
-   * @return boolean true, if tooltipLayerStyleRight is ok.  false, otherwise.
-   */
-  function _checkLeft(targetOffset, tooltipLayerStyleRight, tooltipOffset, tooltipLayer) {
-    if (targetOffset.left + targetOffset.width - tooltipLayerStyleRight - tooltipOffset.width < 0) {
-      // off the left side of the window
-      tooltipLayer.style.left = (-targetOffset.left) + 'px';
-      return false;
-    }
-    tooltipLayer.style.right = tooltipLayerStyleRight + 'px';
-    return true;
-  }
-
-  /**
-   * Determines the position of the tooltip based on the position precedence and availability
-   * of screen space.
-   *
-   * @param {Object} targetElement
-   * @param {Object} tooltipLayer
-   * @param {Object} desiredTooltipPosition
-   *
-   */
-  function _determineAutoPosition(targetElement, tooltipLayer, desiredTooltipPosition) {
-
-    // Take a clone of position precedence. These will be the available
-    var possiblePositions = this._options.positionPrecedence.slice();
-
-    var windowSize = _getWinSize();
-    var tooltipHeight = _getOffset(tooltipLayer).height + 10;
-    var tooltipWidth = _getOffset(tooltipLayer).width + 20;
-    var targetOffset = _getOffset(targetElement);
-
-    // If we check all the possible areas, and there are no valid places for the tooltip, the element
-    // must take up most of the screen real estate. Show the tooltip floating in the middle of the screen.
-    var calculatedPosition = "floating";
-
-    // Check if the width of the tooltip + the starting point would spill off the right side of the screen
-    // If no, neither bottom or top are valid
-    if (targetOffset.left + tooltipWidth > windowSize.width || ((targetOffset.left + (targetOffset.width / 2)) - tooltipWidth) < 0) {
-      _removeEntry(possiblePositions, "bottom");
-      _removeEntry(possiblePositions, "top");
-    } else {
-      // Check for space below
-      if ((targetOffset.height + targetOffset.top + tooltipHeight) > windowSize.height) {
-        _removeEntry(possiblePositions, "bottom");
-      }
-
-      // Check for space above
-      if (targetOffset.top - tooltipHeight < 0) {
-        _removeEntry(possiblePositions, "top");
-      }
-    }
-
-    // Check for space to the right
-    if (targetOffset.width + targetOffset.left + tooltipWidth > windowSize.width) {
-      _removeEntry(possiblePositions, "right");
-    }
-
-    // Check for space to the left
-    if (targetOffset.left - tooltipWidth < 0) {
-      _removeEntry(possiblePositions, "left");
-    }
-
-    // At this point, our array only has positions that are valid. Pick the first one, as it remains in order
-    if (possiblePositions.length > 0) {
-      calculatedPosition = possiblePositions[0];
-    }
-
-    // If the requested position is in the list, replace our calculated choice with that
-    if (desiredTooltipPosition && desiredTooltipPosition != "auto") {
-      if (possiblePositions.indexOf(desiredTooltipPosition) > -1) {
-        calculatedPosition = desiredTooltipPosition;
-      }
-    }
-
-    return calculatedPosition;
-  }
-
-  /**
-   * Remove an entry from a string array if it's there, does nothing if it isn't there.
-   *
-   * @param {Array} stringArray
-   * @param {String} stringToRemove
-   */
-  function _removeEntry(stringArray, stringToRemove) {
-    if (stringArray.indexOf(stringToRemove) > -1) {
-      stringArray.splice(stringArray.indexOf(stringToRemove), 1);
-    }
-  }
-
-  /**
-   * Update the position of the helper layer on the screen
-   *
-   * @api private
-   * @method _setHelperLayerPosition
-   * @param {Object} helperLayer
-   */
-  function _setHelperLayerPosition(helperLayer) {
-    if (helperLayer) {
-      //prevent error when `this._currentStep` in undefined
-      if (!this._introItems[this._currentStep]) return;
-
-      var currentElement  = this._introItems[this._currentStep],
-          elementPosition = _getOffset(currentElement.element),
-          widthHeightPadding = 10;
-
-      // If the target element is fixed, the tooltip should be fixed as well.
-      // Otherwise, remove a fixed class that may be left over from the previous
-      // step.
-      if (_isFixed(currentElement.element)) {
-        helperLayer.className += ' introjs-fixedTooltip';
-      } else {
-        helperLayer.className = helperLayer.className.replace(' introjs-fixedTooltip', '');
-      }
-
-      if (currentElement.position == 'floating') {
-        widthHeightPadding = 0;
-      }
-
-      //set new position to helper layer
-      helperLayer.setAttribute('style', 'width: ' + (elementPosition.width  + widthHeightPadding)  + 'px; ' +
-                                        'height:' + (elementPosition.height + widthHeightPadding)  + 'px; ' +
-                                        'top:'    + (elementPosition.top    - 5)   + 'px;' +
-                                        'left: '  + (elementPosition.left   - 5)   + 'px;');
-
-    }
-  }
-
-  /**
-   * Add disableinteraction layer and adjust the size and position of the layer
-   *
-   * @api private
-   * @method _disableInteraction
-   */
-  function _disableInteraction() {
-    var disableInteractionLayer = document.querySelector('.introjs-disableInteraction');
-
-    if (disableInteractionLayer === null) {
-      disableInteractionLayer = document.createElement('div');
-      disableInteractionLayer.className = 'introjs-disableInteraction';
-      this._targetElement.appendChild(disableInteractionLayer);
-    }
-
-    _setHelperLayerPosition.call(this, disableInteractionLayer);
-  }
-
-  /**
-   * Setting anchors to behave like buttons
-   *
-   * @api private
-   * @method _setAnchorAsButton
-   */
-  function _setAnchorAsButton(anchor){
-    anchor.setAttribute('role', 'button');
-    anchor.tabIndex = 0;
-  }
-
-  /**
-   * Show an element on the page
-   *
-   * @api private
-   * @method _showElement
-   * @param {Object} targetElement
-   */
-  function _showElement(targetElement) {
-    if (typeof (this._introChangeCallback) !== 'undefined') {
-      this._introChangeCallback.call(this, targetElement.element);
-    }
-
-    var self = this,
-        oldHelperLayer = document.querySelector('.introjs-helperLayer'),
-        oldReferenceLayer = document.querySelector('.introjs-tooltipReferenceLayer'),
-        highlightClass = 'introjs-helperLayer',
-        elementPosition = _getOffset(targetElement.element);
-
-    //check for a current step highlight class
-    if (typeof (targetElement.highlightClass) === 'string') {
-      highlightClass += (' ' + targetElement.highlightClass);
-    }
-    //check for options highlight class
-    if (typeof (this._options.highlightClass) === 'string') {
-      highlightClass += (' ' + this._options.highlightClass);
-    }
-
-    if (oldHelperLayer != null) {
-      var oldHelperNumberLayer = oldReferenceLayer.querySelector('.introjs-helperNumberLayer'),
-          oldtooltipLayer      = oldReferenceLayer.querySelector('.introjs-tooltiptext'),
-          oldArrowLayer        = oldReferenceLayer.querySelector('.introjs-arrow'),
-          oldtooltipContainer  = oldReferenceLayer.querySelector('.introjs-tooltip'),
-          skipTooltipButton    = oldReferenceLayer.querySelector('.introjs-skipbutton'),
-          prevTooltipButton    = oldReferenceLayer.querySelector('.introjs-prevbutton'),
-          nextTooltipButton    = oldReferenceLayer.querySelector('.introjs-nextbutton');
-
-      //update or reset the helper highlight class
-      oldHelperLayer.className = highlightClass;
-      //hide the tooltip
-      oldtooltipContainer.style.opacity = 0;
-      oldtooltipContainer.style.display = "none";
-
-      if (oldHelperNumberLayer != null) {
-        var lastIntroItem = this._introItems[(targetElement.step - 2 >= 0 ? targetElement.step - 2 : 0)];
-
-        if (lastIntroItem != null && (this._direction == 'forward' && lastIntroItem.position == 'floating') || (this._direction == 'backward' && targetElement.position == 'floating')) {
-          oldHelperNumberLayer.style.opacity = 0;
-        }
-      }
-
-      //set new position to helper layer
-      _setHelperLayerPosition.call(self, oldHelperLayer);
-      _setHelperLayerPosition.call(self, oldReferenceLayer);
-
-      //remove `introjs-fixParent` class from the elements
-      var fixParents = document.querySelectorAll('.introjs-fixParent');
-      if (fixParents && fixParents.length > 0) {
-        for (var i = fixParents.length - 1; i >= 0; i--) {
-          fixParents[i].className = fixParents[i].className.replace(/introjs-fixParent/g, '').replace(/^\s+|\s+$/g, '');
-        };
-      }
-
-      //remove old classes if the element still exist
-      _removeShowElement();
-
-      //we should wait until the CSS3 transition is competed (it's 0.3 sec) to prevent incorrect `height` and `width` calculation
-      if (self._lastShowElementTimer) {
-        clearTimeout(self._lastShowElementTimer);
-      }
-
-      self._lastShowElementTimer = setTimeout(function() {
-        //set current step to the label
-        if (oldHelperNumberLayer != null) {
-          oldHelperNumberLayer.innerHTML = targetElement.step;
-        }
-        //set current tooltip text
-        oldtooltipLayer.innerHTML = targetElement.intro;
-        //set the tooltip position
-        oldtooltipContainer.style.display = "block";
-        _placeTooltip.call(self, targetElement.element, oldtooltipContainer, oldArrowLayer, oldHelperNumberLayer);
-
-        //change active bullet
-        if (self._options.showBullets) {
-            oldReferenceLayer.querySelector('.introjs-bullets li > a.active').className = '';
-            oldReferenceLayer.querySelector('.introjs-bullets li > a[data-stepnumber="' + targetElement.step + '"]').className = 'active';
-        }
-        oldReferenceLayer.querySelector('.introjs-progress .introjs-progressbar').setAttribute('style', 'width:' + _getProgress.call(self) + '%;');
-
-        //show the tooltip
-        oldtooltipContainer.style.opacity = 1;
-        if (oldHelperNumberLayer) oldHelperNumberLayer.style.opacity = 1;
-
-        //reset button focus
-        if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null && /introjs-donebutton/gi.test(skipTooltipButton.className)) {
-          // skip button is now "done" button
-          skipTooltipButton.focus();
-        } else if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-          //still in the tour, focus on next
-          nextTooltipButton.focus();
-        }
-
-        // change the scroll of the window, if needed
-        _scrollTo.call(self, targetElement.scrollTo, targetElement, oldtooltipLayer);
-      }, 350);
-
-      // end of old element if-else condition
-    } else {
-      var helperLayer       = document.createElement('div'),
-          referenceLayer    = document.createElement('div'),
-          arrowLayer        = document.createElement('div'),
-          tooltipLayer      = document.createElement('div'),
-          tooltipTextLayer  = document.createElement('div'),
-          bulletsLayer      = document.createElement('div'),
-          progressLayer     = document.createElement('div'),
-          buttonsLayer      = document.createElement('div');
-
-      helperLayer.className = highlightClass;
-      referenceLayer.className = 'introjs-tooltipReferenceLayer';
-
-      //set new position to helper layer
-      _setHelperLayerPosition.call(self, helperLayer);
-      _setHelperLayerPosition.call(self, referenceLayer);
-
-      //add helper layer to target element
-      this._targetElement.appendChild(helperLayer);
-      this._targetElement.appendChild(referenceLayer);
-
-      arrowLayer.className = 'introjs-arrow';
-
-      tooltipTextLayer.className = 'introjs-tooltiptext';
-      tooltipTextLayer.innerHTML = targetElement.intro;
-
-      bulletsLayer.className = 'introjs-bullets';
-
-      if (this._options.showBullets === false) {
-        bulletsLayer.style.display = 'none';
-      }
-
-      var ulContainer = document.createElement('ul');
-
-      for (var i = 0, stepsLength = this._introItems.length; i < stepsLength; i++) {
-        var innerLi    = document.createElement('li');
-        var anchorLink = document.createElement('a');
-
-        anchorLink.onclick = function() {
-          self.goToStep(this.getAttribute('data-stepnumber'));
-        };
-
-        if (i === (targetElement.step-1)) anchorLink.className = 'active';
-
-        _setAnchorAsButton(anchorLink);
-        anchorLink.innerHTML = "&nbsp;";
-        anchorLink.setAttribute('data-stepnumber', this._introItems[i].step);
-
-        innerLi.appendChild(anchorLink);
-        ulContainer.appendChild(innerLi);
-      }
-
-      bulletsLayer.appendChild(ulContainer);
-
-      progressLayer.className = 'introjs-progress';
-
-      if (this._options.showProgress === false) {
-        progressLayer.style.display = 'none';
-      }
-      var progressBar = document.createElement('div');
-      progressBar.className = 'introjs-progressbar';
-      progressBar.setAttribute('style', 'width:' + _getProgress.call(this) + '%;');
-
-      progressLayer.appendChild(progressBar);
-
-      buttonsLayer.className = 'introjs-tooltipbuttons';
-      if (this._options.showButtons === false) {
-        buttonsLayer.style.display = 'none';
-      }
-
-      tooltipLayer.className = 'introjs-tooltip';
-      tooltipLayer.appendChild(tooltipTextLayer);
-      tooltipLayer.appendChild(bulletsLayer);
-      tooltipLayer.appendChild(progressLayer);
-
-      //add helper layer number
-      if (this._options.showStepNumbers == true) {
-        var helperNumberLayer = document.createElement('span');
-        helperNumberLayer.className = 'introjs-helperNumberLayer';
-        helperNumberLayer.innerHTML = targetElement.step;
-        referenceLayer.appendChild(helperNumberLayer);
-      }
-
-      tooltipLayer.appendChild(arrowLayer);
-      referenceLayer.appendChild(tooltipLayer);
-
-      //next button
-      var nextTooltipButton = document.createElement('a');
-
-      nextTooltipButton.onclick = function() {
-        if (self._introItems.length - 1 != self._currentStep) {
-          _nextStep.call(self);
-        }
-      };
-
-      _setAnchorAsButton(nextTooltipButton);
-      nextTooltipButton.innerHTML = this._options.nextLabel;
-
-      //previous button
-      var prevTooltipButton = document.createElement('a');
-
-      prevTooltipButton.onclick = function() {
-        if (self._currentStep != 0) {
-          _previousStep.call(self);
-        }
-      };
-
-      _setAnchorAsButton(prevTooltipButton);
-      prevTooltipButton.innerHTML = this._options.prevLabel;
-
-      //skip button
-      var skipTooltipButton = document.createElement('a');
-      skipTooltipButton.className = 'introjs-button introjs-skipbutton';
-      _setAnchorAsButton(skipTooltipButton);
-      skipTooltipButton.innerHTML = this._options.skipLabel;
-
-      skipTooltipButton.onclick = function() {
-        if (self._introItems.length - 1 == self._currentStep && typeof (self._introCompleteCallback) === 'function') {
-          self._introCompleteCallback.call(self);
-        }
-
-        _exitIntro.call(self, self._targetElement);
-      };
-
-      buttonsLayer.appendChild(skipTooltipButton);
-
-      //in order to prevent displaying next/previous button always
-      if (this._introItems.length > 1) {
-        buttonsLayer.appendChild(prevTooltipButton);
-        buttonsLayer.appendChild(nextTooltipButton);
-      }
-
-      tooltipLayer.appendChild(buttonsLayer);
-
-      //set proper position
-      _placeTooltip.call(self, targetElement.element, tooltipLayer, arrowLayer, helperNumberLayer);
-
-      // change the scroll of the window, if needed
-      _scrollTo.call(this, targetElement.scrollTo, targetElement, tooltipLayer);
-
-      //end of new element if-else condition
-    }
-
-    // removing previous disable interaction layer
-    var disableInteractionLayer = self._targetElement.querySelector('.introjs-disableInteraction');
-    if (disableInteractionLayer) {
-      disableInteractionLayer.parentNode.removeChild(disableInteractionLayer);
-    }
-
-    //disable interaction
-    if (targetElement.disableInteraction) {
-      _disableInteraction.call(self);
-    }
-
-    if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-      nextTooltipButton.removeAttribute('tabIndex');
-    }
-    if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-      prevTooltipButton.removeAttribute('tabIndex');
-    }
-
-    // when it's the first step of tour
-    if (this._currentStep == 0 && this._introItems.length > 1) {
-      if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null) {
-        skipTooltipButton.className = 'introjs-button introjs-skipbutton';
-      }
-      if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-        nextTooltipButton.className = 'introjs-button introjs-nextbutton';
-      }
-
-      if (this._options.hidePrev == true) {
-        if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-          prevTooltipButton.className = 'introjs-button introjs-prevbutton introjs-hidden';
-        }
-        if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-          nextTooltipButton.className += ' introjs-fullbutton';
-        }
-      } else {
-        if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-          prevTooltipButton.className = 'introjs-button introjs-prevbutton introjs-disabled';
-        }
-      }
-
-      if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-        prevTooltipButton.tabIndex = '-1';
-      }
-      if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null) {
-        skipTooltipButton.innerHTML = this._options.skipLabel;
-      }
-    } else if (this._introItems.length - 1 == this._currentStep || this._introItems.length == 1) {
-      // last step of tour
-      if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null) {
-        skipTooltipButton.innerHTML = this._options.doneLabel;
-        // adding donebutton class in addition to skipbutton
-        skipTooltipButton.className += ' introjs-donebutton';
-      }
-      if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-        prevTooltipButton.className = 'introjs-button introjs-prevbutton';
-      }
-
-      if (this._options.hideNext == true) {
-        if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-          nextTooltipButton.className = 'introjs-button introjs-nextbutton introjs-hidden';
-        }
-        if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-          prevTooltipButton.className += ' introjs-fullbutton';
-        }
-      } else {
-        if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-          nextTooltipButton.className = 'introjs-button introjs-nextbutton introjs-disabled';
-        }
-      }
-
-      if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-        nextTooltipButton.tabIndex = '-1';
-      }
-    } else {
-      // steps between start and end
-      if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null) {
-        skipTooltipButton.className = 'introjs-button introjs-skipbutton';
-      }
-      if (typeof prevTooltipButton !== "undefined" && prevTooltipButton != null) {
-        prevTooltipButton.className = 'introjs-button introjs-prevbutton';
-      }
-      if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-        nextTooltipButton.className = 'introjs-button introjs-nextbutton';
-      }
-      if (typeof skipTooltipButton !== "undefined" && skipTooltipButton != null) {
-        skipTooltipButton.innerHTML = this._options.skipLabel;
-      }
-    }
-
-    //Set focus on "next" button, so that hitting Enter always moves you onto the next step
-    if (typeof nextTooltipButton !== "undefined" && nextTooltipButton != null) {
-      nextTooltipButton.focus();
-    }
-
-    _setShowElement(targetElement);
-
-    if (typeof (this._introAfterChangeCallback) !== 'undefined') {
-      this._introAfterChangeCallback.call(this, targetElement.element);
-    }
-  }
-
-  /**
-   * To change the scroll of `window` after highlighting an element
-   *
-   * @api private
-   * @method _scrollTo
-   * @param {String} scrollTo
-   * @param {Object} targetElement
-   * @param {Object} tooltipLayer
-   */
-  function _scrollTo(scrollTo, targetElement, tooltipLayer) {
-    if (!this._options.scrollToElement) return;
-
-    if (scrollTo === 'tooltip') {
-      var rect = tooltipLayer.getBoundingClientRect();
-    } else {
-      var rect = targetElement.element.getBoundingClientRect();
-    }
-
-    if (!_elementInViewport(targetElement.element)) {
-      var winHeight = _getWinSize().height;
-      var top = rect.bottom - (rect.bottom - rect.top);
-      var bottom = rect.bottom - winHeight;
-
-      // TODO (afshinm): do we need scroll padding now?
-      // I have changed the scroll option and now it scrolls the window to
-      // the center of the target element or tooltip.
-
-      if (top < 0 || targetElement.element.clientHeight > winHeight) {
-        window.scrollBy(0, rect.top - ((winHeight / 2) -  (rect.height / 2)) - this._options.scrollPadding); // 30px padding from edge to look nice
-
-      //Scroll down
-      } else {
-        window.scrollBy(0, rect.top - ((winHeight / 2) -  (rect.height / 2)) + this._options.scrollPadding); // 30px padding from edge to look nice
-      }
-    }
-  }
-
-  /**
-   * To remove all show element(s)
-   *
-   * @api private
-   * @method _removeShowElement
-   */
-  function _removeShowElement() {
-    var elms = document.querySelectorAll('.introjs-showElement');
-
-    for (var i = 0, l = elms.length; i < l; i++) {
-      var elm = elms[i];
-      _removeClass(elm, /introjs-[a-zA-Z]+/g);
-    }
-  }
-
-  /**
-   * To set the show element
-   * This function set a relative (in most cases) position and changes the z-index
-   *
-   * @api private
-   * @method _setShowElement
-   * @param {Object} targetElement
-   */
-  function _setShowElement(targetElement) {
-    // we need to add this show element class to the parent of SVG elements
-    // because the SVG elements can't have independent z-index
-    if (targetElement.element instanceof SVGElement) {
-      var parentElm = targetElement.element.parentNode;
-
-      while (targetElement.element.parentNode != null) {
-        if (!parentElm.tagName || parentElm.tagName.toLowerCase() === 'body') break;
-
-        if (parentElm.tagName.toLowerCase() === 'svg') {
-          _setClass(parentElm, 'introjs-showElement introjs-relativePosition');
-        }
-
-        parentElm = parentElm.parentNode;
-      }
-    }
-
-    _setClass(targetElement.element, 'introjs-showElement');
-
-    var currentElementPosition = _getPropValue(targetElement.element, 'position');
-    if (currentElementPosition !== 'absolute' &&
-        currentElementPosition !== 'relative' &&
-        currentElementPosition !== 'fixed') {
-      //change to new intro item
-      //targetElement.element.className += ' introjs-relativePosition';
-      _setClass(targetElement.element, 'introjs-relativePosition')
-    }
-
-    var parentElm = targetElement.element.parentNode;
-    while (parentElm != null) {
-      if (!parentElm.tagName || parentElm.tagName.toLowerCase() === 'body') break;
-
-      //fix The Stacking Context problem.
-      //More detail: https://developer.mozilla.org/en-US/docs/Web/Guide/CSS/Understanding_z_index/The_stacking_context
-      var zIndex = _getPropValue(parentElm, 'z-index');
-      var opacity = parseFloat(_getPropValue(parentElm, 'opacity'));
-      var transform = _getPropValue(parentElm, 'transform') || _getPropValue(parentElm, '-webkit-transform') || _getPropValue(parentElm, '-moz-transform') || _getPropValue(parentElm, '-ms-transform') || _getPropValue(parentElm, '-o-transform');
-      if (/[0-9]+/.test(zIndex) || opacity < 1 || (transform !== 'none' && transform !== undefined)) {
-        parentElm.className += ' introjs-fixParent';
-      }
-
-      parentElm = parentElm.parentNode;
-    }
-  }
-
-  function _setClass(element, className) {
-    if (element instanceof SVGElement) {
-      var pre = element.getAttribute('class') || '';
-
-      element.setAttribute('class', pre + ' ' + className);
-    } else {
-      element.className += ' ' + className;
-    }
-  }
-
-  function _removeClass(element, classNameRegex) {
-    if (element instanceof SVGElement) {
-      var pre = element.getAttribute('class') || '';
-
-      element.setAttribute('class', pre.replace(classNameRegex, '').replace(/^\s+|\s+$/g, ''));
-    } else {
-      element.className = element.className.replace(classNameRegex, '').replace(/^\s+|\s+$/g, '');
-    }
-  }
-
-  /**
-   * Get an element CSS property on the page
-   * Thanks to JavaScript Kit: http://www.javascriptkit.com/dhtmltutors/dhtmlcascade4.shtml
-   *
-   * @api private
-   * @method _getPropValue
-   * @param {Object} element
-   * @param {String} propName
-   * @returns Element's property value
-   */
-  function _getPropValue (element, propName) {
-    var propValue = '';
-    if (element.currentStyle) { //IE
-      propValue = element.currentStyle[propName];
-    } else if (document.defaultView && document.defaultView.getComputedStyle) { //Others
-      propValue = document.defaultView.getComputedStyle(element, null).getPropertyValue(propName);
-    }
-
-    //Prevent exception in IE
-    if (propValue && propValue.toLowerCase) {
-      return propValue.toLowerCase();
-    } else {
-      return propValue;
-    }
-  }
-
-  /**
-   * Checks to see if target element (or parents) position is fixed or not
-   *
-   * @api private
-   * @method _isFixed
-   * @param {Object} element
-   * @returns Boolean
-   */
-  function _isFixed (element) {
-    var p = element.parentNode;
-
-    if (!p || p.nodeName === 'HTML') {
-      return false;
-    }
-
-    if (_getPropValue(element, 'position') == 'fixed') {
-      return true;
-    }
-
-    return _isFixed(p);
-  }
-
-  /**
-   * Provides a cross-browser way to get the screen dimensions
-   * via: http://stackoverflow.com/questions/5864467/internet-explorer-innerheight
-   *
-   * @api private
-   * @method _getWinSize
-   * @returns {Object} width and height attributes
-   */
-  function _getWinSize() {
-    if (window.innerWidth != undefined) {
-      return { width: window.innerWidth, height: window.innerHeight };
-    } else {
-      var D = document.documentElement;
-      return { width: D.clientWidth, height: D.clientHeight };
-    }
-  }
-
-  /**
-   * Check to see if the element is in the viewport or not
-   * http://stackoverflow.com/questions/123999/how-to-tell-if-a-dom-element-is-visible-in-the-current-viewport
-   *
-   * @api private
-   * @method _elementInViewport
-   * @param {Object} el
-   */
-  function _elementInViewport(el) {
-    var rect = el.getBoundingClientRect();
-
-    return (
-      rect.top >= 0 &&
-      rect.left >= 0 &&
-      (rect.bottom+80) <= window.innerHeight && // add 80 to get the text right
-      rect.right <= window.innerWidth
-    );
-  }
-
-  /**
-   * Add overlay layer to the page
-   *
-   * @api private
-   * @method _addOverlayLayer
-   * @param {Object} targetElm
-   */
-  function _addOverlayLayer(targetElm) {
-    var overlayLayer = document.createElement('div'),
-        styleText = '',
-        self = this;
-
-    //set css class name
-    overlayLayer.className = 'introjs-overlay';
-
-    //check if the target element is body, we should calculate the size of overlay layer in a better way
-    if (!targetElm.tagName || targetElm.tagName.toLowerCase() === 'body') {
-      styleText += 'top: 0;bottom: 0; left: 0;right: 0;position: fixed;';
-      overlayLayer.setAttribute('style', styleText);
-    } else {
-      //set overlay layer position
-      var elementPosition = _getOffset(targetElm);
-      if (elementPosition) {
-        styleText += 'width: ' + elementPosition.width + 'px; height:' + elementPosition.height + 'px; top:' + elementPosition.top + 'px;left: ' + elementPosition.left + 'px;';
-        overlayLayer.setAttribute('style', styleText);
-      }
-    }
-
-    targetElm.appendChild(overlayLayer);
-
-    overlayLayer.onclick = function() {
-      if (self._options.exitOnOverlayClick == true) {
-        _exitIntro.call(self, targetElm);
-      }
-    };
-
-    setTimeout(function() {
-      styleText += 'opacity: ' + self._options.overlayOpacity.toString() + ';';
-      overlayLayer.setAttribute('style', styleText);
-    }, 10);
-
-    return true;
-  }
-
-  /**
-   * Removes open hint (tooltip hint)
-   *
-   * @api private
-   * @method _removeHintTooltip
-   */
-  function _removeHintTooltip() {
-    var tooltip = this._targetElement.querySelector('.introjs-hintReference');
-
-    if (tooltip) {
-      var step = tooltip.getAttribute('data-step');
-      tooltip.parentNode.removeChild(tooltip);
-      return step;
-    }
-  }
-
-  /**
-   * Start parsing hint items
-   *
-   * @api private
-   * @param {Object} targetElm
-   * @method _startHint
-   */
-  function _populateHints(targetElm) {
-    var self = this;
-    this._introItems = [];
-
-    if (this._options.hints) {
-      for (var i = 0, l = this._options.hints.length; i < l; i++) {
-        var currentItem = _cloneObject(this._options.hints[i]);
-
-        if (typeof(currentItem.element) === 'string') {
-          //grab the element with given selector from the page
-          currentItem.element = document.querySelector(currentItem.element);
-        }
-
-        currentItem.hintPosition = currentItem.hintPosition || this._options.hintPosition;
-        currentItem.hintAnimation = currentItem.hintAnimation || this._options.hintAnimation;
-
-        if (currentItem.element != null) {
-          this._introItems.push(currentItem);
-        }
-      }
-    } else {
-      var hints = targetElm.querySelectorAll('*[data-hint]');
-
-      if (hints.length < 1) {
-        return false;
-      }
-
-      //first add intro items with data-step
-      for (var i = 0, l = hints.length; i < l; i++) {
-        var currentElement = hints[i];
-
-        // hint animation
-        var hintAnimation = currentElement.getAttribute('data-hintAnimation');
-
-        if (hintAnimation) {
-          hintAnimation = (hintAnimation == 'true');
-        } else {
-          hintAnimation = this._options.hintAnimation;
-        }
-
-        this._introItems.push({
-          element: currentElement,
-          hint: currentElement.getAttribute('data-hint'),
-          hintPosition: currentElement.getAttribute('data-hintPosition') || this._options.hintPosition,
-          hintAnimation: hintAnimation,
-          tooltipClass: currentElement.getAttribute('data-tooltipClass'),
-          position: currentElement.getAttribute('data-position') || this._options.tooltipPosition
-        });
-      }
-    }
-
-    _addHints.call(this);
-
-    if (document.addEventListener) {
-      document.addEventListener('click', _removeHintTooltip.bind(this), false);
-      //for window resize
-      window.addEventListener('resize', _reAlignHints.bind(this), true);
-    } else if (document.attachEvent) { //IE
-      //for window resize
-      document.attachEvent('onclick', _removeHintTooltip.bind(this));
-      document.attachEvent('onresize', _reAlignHints.bind(this));
-    }
-  }
-
-  /**
-   * Re-aligns all hint elements
-   *
-   * @api private
-   * @method _reAlignHints
-   */
-  function _reAlignHints() {
-    for (var i = 0, l = this._introItems.length; i < l; i++) {
-      var item = this._introItems[i];
-
-      if (typeof (item.targetElement) == 'undefined') continue;
-
-      _alignHintPosition.call(this, item.hintPosition, item.element, item.targetElement)
-    }
-  }
-
-  /**
-   * Hide a hint
-   *
-   * @api private
-   * @method _hideHint
-   */
-  function _hideHint(stepId) {
-    _removeHintTooltip.call(this);
-    var hint = this._targetElement.querySelector('.introjs-hint[data-step="' + stepId + '"]');
-
-    if (hint) {
-      hint.className += ' introjs-hidehint';
-    }
-
-    // call the callback function (if any)
-    if (typeof (this._hintCloseCallback) !== 'undefined') {
-      this._hintCloseCallback.call(this, stepId);
-    }
-  }
-
-  /**
-   * Hide all hints
-   *
-   * @api private
-   * @method _hideHints
-   */
-  function _hideHints() {
-    var hints = this._targetElement.querySelectorAll('.introjs-hint');
-
-    if (hints && hints.length > 0) {
-      for (var i = 0; i < hints.length; i++) {
-        _hideHint.call(this, hints[i].getAttribute('data-step'));
-      }
-    }
-  }
-
-  /**
-   * Show all hints
-   *
-   * @api private
-   * @method _showHints
-   */
-  function _showHints() {
-    var hints = this._targetElement.querySelectorAll('.introjs-hint');
-
-    if (hints && hints.length > 0) {
-      for (var i = 0; i < hints.length; i++) {
-        _showHint.call(this, hints[i].getAttribute('data-step'));
-      }
-    } else {
-      _populateHints.call(this, this._targetElement);
-    }
-  };
-
-  /**
-   * Show a hint
-   *
-   * @api private
-   * @method _showHint
-   */
-  function _showHint(stepId) {
-    var hint = this._targetElement.querySelector('.introjs-hint[data-step="' + stepId + '"]');
-
-    if (hint) {
-      hint.className = hint.className.replace(/introjs\-hidehint/g, '');
-    }
-  };
-
-  /**
-   * Removes all hint elements on the page
-   * Useful when you want to destroy the elements and add them again (e.g. a modal or popup)
-   *
-   * @api private
-   * @method _removeHints
-   */
-  function _removeHints() {
-    var hints = this._targetElement.querySelectorAll('.introjs-hint');
-
-    if (hints && hints.length > 0) {
-      for (var i = 0; i < hints.length; i++) {
-        _removeHint.call(this, hints[i].getAttribute('data-step'));
-      }
-    }
-  };
-
-  /**
-   * Remove one single hint element from the page
-   * Useful when you want to destroy the element and add them again (e.g. a modal or popup)
-   * Use removeHints if you want to remove all elements.
-   *
-   * @api private
-   * @method _removeHint
-   */
-  function _removeHint(stepId) {
-    var hint = this._targetElement.querySelector('.introjs-hint[data-step="' + stepId + '"]');
-
-    if (hint) {
-      hint.parentNode.removeChild(hint);
-    }
-  };
-
-  /**
-   * Add all available hints to the page
-   *
-   * @api private
-   * @method _addHints
-   */
-  function _addHints() {
-    var self = this;
-
-    var oldHintsWrapper = document.querySelector('.introjs-hints');
-
-    if (oldHintsWrapper != null) {
-      hintsWrapper = oldHintsWrapper;
-    } else {
-      var hintsWrapper = document.createElement('div');
-      hintsWrapper.className = 'introjs-hints';
-    }
-
-    for (var i = 0, l = this._introItems.length; i < l; i++) {
-      var item = this._introItems[i];
-
-      // avoid append a hint twice
-      if (document.querySelector('.introjs-hint[data-step="' + i + '"]'))
-        continue;
-
-      var hint = document.createElement('a');
-      _setAnchorAsButton(hint);
-
-      (function (hint, item, i) {
-        // when user clicks on the hint element
-        hint.onclick = function(e) {
-          var evt = e ? e : window.event;
-          if (evt.stopPropagation)    evt.stopPropagation();
-          if (evt.cancelBubble != null) evt.cancelBubble = true;
-
-          _showHintDialog.call(self, i);
-        };
-      }(hint, item, i));
-
-      hint.className = 'introjs-hint';
-
-      if (!item.hintAnimation) {
-        hint.className += ' introjs-hint-no-anim';
-      }
-
-      // hint's position should be fixed if the target element's position is fixed
-      if (_isFixed(item.element)) {
-        hint.className += ' introjs-fixedhint';
-      }
-
-      var hintDot = document.createElement('div');
-      hintDot.className = 'introjs-hint-dot';
-      var hintPulse = document.createElement('div');
-      hintPulse.className = 'introjs-hint-pulse';
-
-      hint.appendChild(hintDot);
-      hint.appendChild(hintPulse);
-      hint.setAttribute('data-step', i);
-
-      // we swap the hint element with target element
-      // because _setHelperLayerPosition uses `element` property
-      item.targetElement = item.element;
-      item.element = hint;
-
-      // align the hint position
-      _alignHintPosition.call(this, item.hintPosition, hint, item.targetElement);
-
-      hintsWrapper.appendChild(hint);
-    }
-
-    // adding the hints wrapper
-    document.body.appendChild(hintsWrapper);
-
-    // call the callback function (if any)
-    if (typeof (this._hintsAddedCallback) !== 'undefined') {
-      this._hintsAddedCallback.call(this);
-    }
-  }
-
-  /**
-   * Aligns hint position
-   *
-   * @api private
-   * @method _alignHintPosition
-   * @param {String} position
-   * @param {Object} hint
-   * @param {Object} element
-   */
-  function _alignHintPosition(position, hint, element) {
-    // get/calculate offset of target element
-    var offset = _getOffset.call(this, element);
-    var iconWidth = 20;
-    var iconHeight = 20;
-
-    // align the hint element
-    switch (position) {
-      default:
-      case 'top-left':
-        hint.style.left = offset.left + 'px';
-        hint.style.top = offset.top + 'px';
-        break;
-      case 'top-right':
-        hint.style.left = (offset.left + offset.width - iconWidth) + 'px';
-        hint.style.top = offset.top + 'px';
-        break;
-      case 'bottom-left':
-        hint.style.left = offset.left + 'px';
-        hint.style.top = (offset.top + offset.height - iconHeight) + 'px';
-        break;
-      case 'bottom-right':
-        hint.style.left = (offset.left + offset.width - iconWidth) + 'px';
-        hint.style.top = (offset.top + offset.height - iconHeight) + 'px';
-        break;
-      case 'middle-left':
-        hint.style.left = offset.left + 'px';
-        hint.style.top = (offset.top + (offset.height - iconHeight) / 2) + 'px';
-        break;
-      case 'middle-right':
-        hint.style.left = (offset.left + offset.width - iconWidth) + 'px';
-        hint.style.top = (offset.top + (offset.height - iconHeight) / 2) + 'px';
-        break;
-      case 'middle-middle':
-        hint.style.left = (offset.left + (offset.width - iconWidth) / 2) + 'px';
-        hint.style.top = (offset.top + (offset.height - iconHeight) / 2) + 'px';
-        break;
-      case 'bottom-middle':
-        hint.style.left = (offset.left + (offset.width - iconWidth) / 2) + 'px';
-        hint.style.top = (offset.top + offset.height - iconHeight) + 'px';
-        break;
-      case 'top-middle':
-        hint.style.left = (offset.left + (offset.width - iconWidth) / 2) + 'px';
-        hint.style.top = offset.top + 'px';
-        break;
-    }
-  }
-
-  /**
-   * Triggers when user clicks on the hint element
-   *
-   * @api private
-   * @method _showHintDialog
-   * @param {Number} stepId
-   */
-  function _showHintDialog(stepId) {
-    var hintElement = document.querySelector('.introjs-hint[data-step="' + stepId + '"]');
-    var item = this._introItems[stepId];
-
-    // call the callback function (if any)
-    if (typeof (this._hintClickCallback) !== 'undefined') {
-      this._hintClickCallback.call(this, hintElement, item, stepId);
-    }
-
-    // remove all open tooltips
-    var removedStep = _removeHintTooltip.call(this);
-
-    // to toggle the tooltip
-    if (parseInt(removedStep, 10) == stepId) {
-      return;
-    }
-
-    var tooltipLayer = document.createElement('div');
-    var tooltipTextLayer = document.createElement('div');
-    var arrowLayer = document.createElement('div');
-    var referenceLayer = document.createElement('div');
-
-    tooltipLayer.className = 'introjs-tooltip';
-
-    tooltipLayer.onclick = function (e) {
-      //IE9 & Other Browsers
-      if (e.stopPropagation) {
-        e.stopPropagation();
-      }
-      //IE8 and Lower
-      else {
-        e.cancelBubble = true;
-      }
-    };
-
-    tooltipTextLayer.className = 'introjs-tooltiptext';
-
-    var tooltipWrapper = document.createElement('p');
-    tooltipWrapper.innerHTML = item.hint;
-
-    var closeButton = document.createElement('a');
-    closeButton.className = 'introjs-button';
-    closeButton.innerHTML = this._options.hintButtonLabel;
-    closeButton.onclick = _hideHint.bind(this, stepId);
-
-    tooltipTextLayer.appendChild(tooltipWrapper);
-    tooltipTextLayer.appendChild(closeButton);
-
-    arrowLayer.className = 'introjs-arrow';
-    tooltipLayer.appendChild(arrowLayer);
-
-    tooltipLayer.appendChild(tooltipTextLayer);
-
-    // set current step for _placeTooltip function
-    this._currentStep = hintElement.getAttribute('data-step');
-
-    // align reference layer position
-    referenceLayer.className = 'introjs-tooltipReferenceLayer introjs-hintReference';
-    referenceLayer.setAttribute('data-step', hintElement.getAttribute('data-step'));
-    _setHelperLayerPosition.call(this, referenceLayer);
-
-    referenceLayer.appendChild(tooltipLayer);
-    document.body.appendChild(referenceLayer);
-
-    //set proper position
-    _placeTooltip.call(this, hintElement, tooltipLayer, arrowLayer, null, true);
-  }
-
-  /**
-   * Get an element position on the page
-   * Thanks to `meouw`: http://stackoverflow.com/a/442474/375966
-   *
-   * @api private
-   * @method _getOffset
-   * @param {Object} element
-   * @returns Element's position info
-   */
-  function _getOffset(element) {
-    var elementPosition = {};
-
-    var body = document.body;
-    var docEl = document.documentElement;
-
-    var scrollTop = window.pageYOffset || docEl.scrollTop || body.scrollTop;
-    var scrollLeft = window.pageXOffset || docEl.scrollLeft || body.scrollLeft;
-
-    if (element instanceof SVGElement) {
-      var x = element.getBoundingClientRect()
-      elementPosition.top = x.top + scrollTop;
-      elementPosition.width = x.width;
-      elementPosition.height = x.height;
-      elementPosition.left = x.left + scrollLeft;
-    } else {
-      //set width
-      elementPosition.width = element.offsetWidth;
-
-      //set height
-      elementPosition.height = element.offsetHeight;
-
-      //calculate element top and left
-      var _x = 0;
-      var _y = 0;
-      while (element && !isNaN(element.offsetLeft) && !isNaN(element.offsetTop)) {
-        _x += element.offsetLeft;
-        _y += element.offsetTop;
-        element = element.offsetParent;
-      }
-      //set top
-      elementPosition.top = _y;
-      //set left
-      elementPosition.left = _x;
-    }
-
-    return elementPosition;
-  }
-
-  /**
-   * Gets the current progress percentage
-   *
-   * @api private
-   * @method _getProgress
-   * @returns current progress percentage
-   */
-  function _getProgress() {
-    // Steps are 0 indexed
-    var currentStep = parseInt((this._currentStep + 1), 10);
-    return ((currentStep / this._introItems.length) * 100);
-  }
-
-  /**
-   * Overwrites obj1's values with obj2's and adds obj2's if non existent in obj1
-   * via: http://stackoverflow.com/questions/171251/how-can-i-merge-properties-of-two-javascript-objects-dynamically
-   *
-   * @param obj1
-   * @param obj2
-   * @returns obj3 a new object based on obj1 and obj2
-   */
-  function _mergeOptions(obj1,obj2) {
-    var obj3 = {};
-    for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
-    for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
-    return obj3;
-  }
-
-  var introJs = function (targetElm) {
-    if (typeof (targetElm) === 'object') {
-      //Ok, create a new instance
-      return new IntroJs(targetElm);
-
-    } else if (typeof (targetElm) === 'string') {
-      //select the target element with query selector
-      var targetElement = document.querySelector(targetElm);
-
-      if (targetElement) {
-        return new IntroJs(targetElement);
-      } else {
-        throw new Error('There is no element with given selector.');
-      }
-    } else {
-      return new IntroJs(document.body);
-    }
-  };
-
-  /**
-   * Current IntroJs version
-   *
-   * @property version
-   * @type String
-   */
-  introJs.version = VERSION;
-
-  //Prototype
-  introJs.fn = IntroJs.prototype = {
-    clone: function () {
-      return new IntroJs(this);
-    },
-    setOption: function(option, value) {
-      this._options[option] = value;
-      return this;
-    },
-    setOptions: function(options) {
-      this._options = _mergeOptions(this._options, options);
-      return this;
-    },
-    start: function () {
-      _introForElement.call(this, this._targetElement);
-      return this;
-    },
-    goToStep: function(step) {
-      _goToStep.call(this, step);
-      return this;
-    },
-    addStep: function(options) {
-      if (!this._options.steps) {
-        this._options.steps = [];
-      }
-
-      this._options.steps.push(options);
-
-      return this;
-    },
-    addSteps: function(steps) {
-      if (!steps.length) return;
-
-      for(var index = 0; index < steps.length; index++) {
-        this.addStep(steps[index]);
-      }
-
-      return this;
-    },
-    goToStepNumber: function(step) {
-      _goToStepNumber.call(this, step);
-
-      return this;
-    },
-    nextStep: function() {
-      _nextStep.call(this);
-      return this;
-    },
-    previousStep: function() {
-      _previousStep.call(this);
-      return this;
-    },
-    exit: function(force) {
-      _exitIntro.call(this, this._targetElement, force);
-      return this;
-    },
-    refresh: function() {
-      _refresh.call(this);
-      return this;
-    },
-    onbeforechange: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introBeforeChangeCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onbeforechange was not a function');
-      }
-      return this;
-    },
-    onchange: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introChangeCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onchange was not a function.');
-      }
-      return this;
-    },
-    onafterchange: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introAfterChangeCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onafterchange was not a function');
-      }
-      return this;
-    },
-    oncomplete: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introCompleteCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for oncomplete was not a function.');
-      }
-      return this;
-    },
-    onhintsadded: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._hintsAddedCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onhintsadded was not a function.');
-      }
-      return this;
-    },
-    onhintclick: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._hintClickCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onhintclick was not a function.');
-      }
-      return this;
-    },
-    onhintclose: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._hintCloseCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onhintclose was not a function.');
-      }
-      return this;
-    },
-    onexit: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introExitCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onexit was not a function.');
-      }
-      return this;
-    },
-    onbeforeexit: function(providedCallback) {
-      if (typeof (providedCallback) === 'function') {
-        this._introBeforeExitCallback = providedCallback;
-      } else {
-        throw new Error('Provided callback for onbeforeexit was not a function.');
-      }
-      return this;
-    },
-    addHints: function() {
-      _populateHints.call(this, this._targetElement);
-      return this;
-    },
-    hideHint: function (stepId) {
-      _hideHint.call(this, stepId);
-      return this;
-    },
-    hideHints: function () {
-      _hideHints.call(this);
-      return this;
-    },
-    showHint: function (stepId) {
-      _showHint.call(this, stepId);
-      return this;
-    },
-    showHints: function () {
-      _showHints.call(this);
-      return this;
-    },
-    removeHints: function () {
-      _removeHints.call(this);
-      return this;
-    },
-    removeHint: function (stepId) {
-      _removeHint.call(this, stepId);
-      return this;
-    },
-    showHintDialog: function (stepId) {
-      _showHintDialog.call(this, stepId);
-      return this;
-    }
-  };
-
-  exports.introJs = introJs;
-  return introJs;
-}));
-
+/**! hopscotch - v0.3.1
+*
+* Copyright 2017 LinkedIn Corp. All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+!function(a,b){"object"==typeof exports&&"undefined"!=typeof module?module.exports=b():"function"==typeof define&&define.amd?define(b):a.hopscotch=b()}(this,function(){"use strict";var a,b,c,d,e,f,g,h,i,j,k,l,m,n="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(a){return typeof a}:function(a){return a&&"function"==typeof Symbol&&a.constructor===Symbol&&a!==Symbol.prototype?"symbol":typeof a},o="bubble_default",p=window.Sizzle||null,q="undefined",r=!1,s=("undefined"==typeof jQuery?"undefined":n(jQuery))!==q,t=!1,u=!1,v=/^[a-zA-Z]+[a-zA-Z0-9_-]*$/,w={left:"right",right:"left"};try{n(window.sessionStorage)!==q&&(t=!0,sessionStorage.setItem("hopscotch.test.storage","ok"),sessionStorage.removeItem("hopscotch.test.storage"),u=!0)}catch(x){}l={smoothScroll:!0,scrollDuration:1e3,scrollTopMargin:200,showCloseButton:!0,showPrevButton:!1,showNextButton:!0,bubbleWidth:280,bubblePadding:15,arrowWidth:20,skipIfNoElement:!0,isRtl:!1,cookieName:"hopscotch.tour.state"},Array.isArray||(Array.isArray=function(a){return"[object Array]"===Object.prototype.toString.call(a)}),k=function(){r&&m.startTour()},h={addClass:function(a,b){var c,d,e,f;if(a.className){for(d=b.split(/\s+/),c=" "+a.className+" ",e=0,f=d.length;f>e;++e)c.indexOf(" "+d[e]+" ")<0&&(c+=d[e]+" ");a.className=c.replace(/^\s+|\s+$/g,"")}else a.className=b},removeClass:function(a,b){var c,d,e,f;for(d=b.split(/\s+/),c=" "+a.className+" ",e=0,f=d.length;f>e;++e)c=c.replace(" "+d[e]+" "," ");a.className=c.replace(/^\s+|\s+$/g,"")},hasClass:function(a,b){var c;return a.className?(c=" "+a.className+" ",-1!==c.indexOf(" "+b+" ")):!1},getPixelValue:function(a){var b="undefined"==typeof a?"undefined":n(a);return"number"===b?a:"string"===b?parseInt(a,10):0},valOrDefault:function(a,b){return("undefined"==typeof a?"undefined":n(a))!==q?a:b},invokeCallbackArrayHelper:function(a){var b;return Array.isArray(a)&&(b=j[a[0]],"function"==typeof b)?b.apply(this,a.slice(1)):void 0},invokeCallbackArray:function(a){var b,c;if(Array.isArray(a)){if("string"==typeof a[0])return h.invokeCallbackArrayHelper(a);for(b=0,c=a.length;c>b;++b)h.invokeCallback(a[b])}},invokeCallback:function(a){return"function"==typeof a?a():"string"==typeof a&&j[a]?j[a]():h.invokeCallbackArray(a)},invokeEventCallbacks:function(a,b){var c,d,e=i[a];if(b)return this.invokeCallback(b);for(c=0,d=e.length;d>c;++c)this.invokeCallback(e[c].cb)},getScrollTop:function(){var a;return a=n(window.pageYOffset)!==q?window.pageYOffset:document.documentElement.scrollTop},getScrollLeft:function(){var a;return a=n(window.pageXOffset)!==q?window.pageXOffset:document.documentElement.scrollLeft},getWindowHeight:function(){return window.innerHeight||document.documentElement.clientHeight},addEvtListener:function(a,b,c){return a?a.addEventListener?a.addEventListener(b,c,!1):a.attachEvent("on"+b,c):void 0},removeEvtListener:function(a,b,c){return a?a.removeEventListener?a.removeEventListener(b,c,!1):a.detachEvent("on"+b,c):void 0},documentIsReady:function(){return"complete"===document.readyState},evtPreventDefault:function(a){a.preventDefault?a.preventDefault():event&&(event.returnValue=!1)},extend:function(a,b){var c;for(c in b)b.hasOwnProperty(c)&&(a[c]=b[c])},getStepTargetHelper:function(a){var b=document.getElementById(a);if(b)return b;if(s)return b=jQuery(a),b.length?b[0]:null;if(p)return b=new p(a),b.length?b[0]:null;if(document.querySelector)try{return document.querySelector(a)}catch(c){}return/^#[a-zA-Z][\w-_:.]*$/.test(a)?document.getElementById(a.substring(1)):null},getStepTarget:function(a){var b;if(!a||!a.target)return null;if("string"==typeof a.target)return h.getStepTargetHelper(a.target);if(Array.isArray(a.target)){var c,d;for(c=0,d=a.target.length;d>c;c++)if("string"==typeof a.target[c]&&(b=h.getStepTargetHelper(a.target[c])))return b;return null}return a.target},getI18NString:function(a){return e[a]||d[a]},setState:function(a,b,c){var d,e="";if(t&&u)try{sessionStorage.setItem(a,b)}catch(f){u=!1,this.setState(a,b,c)}else t&&sessionStorage.removeItem(a),c&&(d=new Date,d.setTime(d.getTime()+24*c*60*60*1e3),e="; expires="+d.toGMTString()),document.cookie=a+"="+b+e+"; path=/"},getState:function(a){var b,c,d,e=a+"=",f=document.cookie.split(";");if(t&&(d=sessionStorage.getItem(a)))return d;for(b=0;b<f.length;b++){for(c=f[b];" "===c.charAt(0);)c=c.substring(1,c.length);if(0===c.indexOf(e)){d=c.substring(e.length,c.length);break}}return d},clearState:function(a){t?sessionStorage.removeItem(a):this.setState(a,"",-1)},normalizePlacement:function(a){!a.placement&&a.orientation&&(a.placement=a.orientation)},flipPlacement:function(a){if(a.isRtl&&!a._isFlipped){var b,c,d=["orientation","placement"];a.xOffset&&(a.xOffset=-1*this.getPixelValue(a.xOffset));for(c in d)b=d[c],a.hasOwnProperty(b)&&w.hasOwnProperty(a[b])&&(a[b]=w[a[b]]);a._isFlipped=!0}}},h.addEvtListener(window,"load",k),i={next:[],prev:[],start:[],end:[],show:[],error:[],close:[]},j={},d={stepNums:null,nextBtn:"Next",prevBtn:"Back",doneBtn:"Done",skipBtn:"Skip",closeTooltip:"Close"},e={},b=function(a){this.init(a)},b.prototype={isShowing:!1,currStep:void 0,setPosition:function(a){var b,c,d,e,f,g,i,j=h.getStepTarget(a),k=this.element,l=this.arrowEl,m=a.isRtl?"right":"left";if(h.flipPlacement(a),h.normalizePlacement(a),c=k.offsetWidth,b=k.offsetHeight,h.removeClass(k,"fade-in-down fade-in-up fade-in-left fade-in-right"),d=j.getBoundingClientRect(),i=a.isRtl?d.right-c:d.left,"top"===a.placement)e=d.top-b-this.opt.arrowWidth,f=i;else if("bottom"===a.placement)e=d.bottom+this.opt.arrowWidth,f=i;else if("left"===a.placement)e=d.top,f=d.left-c-this.opt.arrowWidth;else{if("right"!==a.placement)throw new Error("Bubble placement failed because step.placement is invalid or undefined!");e=d.top,f=d.right+this.opt.arrowWidth}g="center"!==a.arrowOffset?h.getPixelValue(a.arrowOffset):a.arrowOffset,g?"top"===a.placement||"bottom"===a.placement?(l.style.top="","center"===g?l.style[m]=Math.floor(c/2-l.offsetWidth/2)+"px":l.style[m]=g+"px"):("left"===a.placement||"right"===a.placement)&&(l.style[m]="","center"===g?l.style.top=Math.floor(b/2-l.offsetHeight/2)+"px":l.style.top=g+"px"):(l.style.top="",l.style[m]=""),"center"===a.xOffset?f=d.left+j.offsetWidth/2-c/2:f+=h.getPixelValue(a.xOffset),"center"===a.yOffset?e=d.top+j.offsetHeight/2-b/2:e+=h.getPixelValue(a.yOffset),a.fixedElement||(e+=h.getScrollTop(),f+=h.getScrollLeft()),k.style.position=a.fixedElement?"fixed":"absolute",k.style.top=e+"px",k.style.left=f+"px"},render:function(a,b,c){var d,e,g,i,j,k,l,n,p,q,r=this.element;if(a?this.currStep=a:this.currStep&&(a=this.currStep),this.opt.isTourBubble?(i=m.getCurrTour(),i&&(e=i.customData,d=i.customRenderer,a.isRtl=a.hasOwnProperty("isRtl")?a.isRtl:i.hasOwnProperty("isRtl")?i.isRtl:this.opt.isRtl,g=i.unsafe,Array.isArray(i.steps)&&(j=i.steps.length,k=this._getStepI18nNum(this._getStepNum(j-1)),n=this._getStepNum(b)===this._getStepNum(j-1)))):(e=a.customData,d=a.customRenderer,g=a.unsafe,a.isRtl=a.hasOwnProperty("isRtl")?a.isRtl:this.opt.isRtl),l=n?h.getI18NString("doneBtn"):a.showSkip?h.getI18NString("skipBtn"):h.getI18NString("nextBtn"),h.flipPlacement(a),h.normalizePlacement(a),this.placement=a.placement,q={i18n:{prevBtn:h.getI18NString("prevBtn"),nextBtn:l,closeTooltip:h.getI18NString("closeTooltip"),stepNum:this._getStepI18nNum(this._getStepNum(b)),numSteps:k},buttons:{showPrev:h.valOrDefault(a.showPrevButton,this.opt.showPrevButton)&&this._getStepNum(b)>0,showNext:h.valOrDefault(a.showNextButton,this.opt.showNextButton),showCTA:h.valOrDefault(a.showCTAButton&&a.ctaLabel,!1),ctaLabel:a.ctaLabel,showClose:h.valOrDefault(this.opt.showCloseButton,!0)},step:{num:b,isLast:h.valOrDefault(n,!1),title:a.title||"",content:a.content||"",isRtl:a.isRtl,placement:a.placement,padding:h.valOrDefault(a.padding,this.opt.bubblePadding),width:h.getPixelValue(a.width)||this.opt.bubbleWidth,customData:a.customData||{}},tour:{isTour:this.opt.isTourBubble,numSteps:j,unsafe:h.valOrDefault(g,!1),customData:e||{}}},"function"==typeof d)r.innerHTML=d(q);else if("string"==typeof d){if(!m.templates||"function"!=typeof m.templates[d])throw new Error('Bubble rendering failed - template "'+d+'" is not a function.');r.innerHTML=m.templates[d](q)}else if(f)r.innerHTML=f(q);else{if(!m.templates||"function"!=typeof m.templates[o])throw new Error('Bubble rendering failed - template "'+o+'" is not a function.');r.innerHTML=m.templates[o](q)}var s,t=r.children,u=t.length;for(p=0;u>p;p++)s=t[p],h.hasClass(s,"hopscotch-arrow")&&(this.arrowEl=s);return r.style.zIndex="number"==typeof a.zindex?a.zindex:"",this._setArrow(a.placement),this.hide(!1),this.setPosition(a),c&&c(!a.fixedElement),this},_getStepNum:function(a){var b,c,d=0,e=m.getSkippedStepsIndexes(),f=e.length;for(c=0;f>c;c++)b=e[c],a>b&&d++;return a-d},_getStepI18nNum:function(a){var b=h.getI18NString("stepNums");return b&&a<b.length?a=b[a]:a+=1,a},_setArrow:function(a){h.removeClass(this.arrowEl,"down up right left"),"top"===a?h.addClass(this.arrowEl,"down"):"bottom"===a?h.addClass(this.arrowEl,"up"):"left"===a?h.addClass(this.arrowEl,"right"):"right"===a&&h.addClass(this.arrowEl,"left")},_getArrowDirection:function(){return"top"===this.placement?"down":"bottom"===this.placement?"up":"left"===this.placement?"right":"right"===this.placement?"left":void 0},show:function(){var a=this,b="fade-in-"+this._getArrowDirection(),c=1e3;return h.removeClass(this.element,"hide"),h.addClass(this.element,b),setTimeout(function(){h.removeClass(a.element,"invisible")},50),setTimeout(function(){h.removeClass(a.element,b)},c),this.isShowing=!0,this},hide:function(a){var b=this.element;return a=h.valOrDefault(a,!0),b.style.top="",b.style.left="",a?(h.addClass(b,"hide"),h.removeClass(b,"invisible")):(h.removeClass(b,"hide"),h.addClass(b,"invisible")),h.removeClass(b,"animate fade-in-up fade-in-down fade-in-right fade-in-left"),this.isShowing=!1,this},destroy:function(){var a=this.element;a&&a.parentNode.removeChild(a),h.removeEvtListener(a,"click",this.clickCb)},_handleBubbleClick:function(a){function b(c){return c===a.currentTarget?null:h.hasClass(c,"hopscotch-cta")?"cta":h.hasClass(c,"hopscotch-next")?"next":h.hasClass(c,"hopscotch-prev")?"prev":h.hasClass(c,"hopscotch-close")?"close":b(c.parentElement)}var c;a=a||window.event;var d=a.target||a.srcElement;if(c=b(d),"cta"===c)this.opt.isTourBubble||m.getCalloutManager().removeCallout(this.currStep.id),this.currStep.onCTA&&h.invokeCallback(this.currStep.onCTA);else if("next"===c)m.nextStep(!0);else if("prev"===c)m.prevStep(!0);else if("close"===c){if(this.opt.isTourBubble){var e=m.getCurrStepNum(),f=m.getCurrTour(),g=e===f.steps.length-1;h.invokeEventCallbacks("close"),m.endTour(!0,g)}else this.opt.onClose&&h.invokeCallback(this.opt.onClose),this.opt.id&&!this.opt.isTourBubble?m.getCalloutManager().removeCallout(this.opt.id):this.destroy();h.evtPreventDefault(a)}},init:function(a){var b,c,d,e,f=document.createElement("div"),g=this,i=!1;this.element=f,e={showPrevButton:l.showPrevButton,showNextButton:l.showNextButton,bubbleWidth:l.bubbleWidth,bubblePadding:l.bubblePadding,arrowWidth:l.arrowWidth,isRtl:l.isRtl,showNumber:!0,isTourBubble:!0},a=("undefined"==typeof a?"undefined":n(a))===q?{}:a,h.extend(e,a),this.opt=e,f.className="hopscotch-bubble animated",e.isTourBubble?(d=m.getCurrTour(),d&&h.addClass(f,"tour-"+d.id)):h.addClass(f,"hopscotch-callout no-number"),b=function(){!i&&g.isShowing&&(i=!0,setTimeout(function(){g.setPosition(g.currStep),i=!1},100))},h.addEvtListener(window,"resize",b),this.clickCb=function(a){g._handleBubbleClick(a)},h.addEvtListener(f,"click",this.clickCb),this.hide(),h.documentIsReady()?document.body.appendChild(f):(document.addEventListener?(c=function(){document.removeEventListener("DOMContentLoaded",c),window.removeEventListener("load",c),document.body.appendChild(f)},document.addEventListener("DOMContentLoaded",c,!1)):(c=function(){"complete"===document.readyState&&(document.detachEvent("onreadystatechange",c),window.detachEvent("onload",c),document.body.appendChild(f))},document.attachEvent("onreadystatechange",c)),h.addEvtListener(window,"load",c))}},c=function(){var a={},c={};this.createCallout=function(d){var e;if(!d.id)throw new Error("Must specify a callout id.");if(!v.test(d.id))throw new Error("Callout ID is using an invalid format. Use alphanumeric, underscores, and/or hyphens only. First character must be a letter.");if(a[d.id])throw new Error("Callout by that id already exists. Please choose a unique id.");if(!h.getStepTarget(d))throw new Error("Must specify existing target element via 'target' option.");return d.showNextButton=d.showPrevButton=!1,d.isTourBubble=!1,e=new b(d),a[d.id]=e,c[d.id]=d,e.render(d,null,function(){e.show(),d.onShow&&h.invokeCallback(d.onShow)}),e},this.getCallout=function(b){return a[b]},this.removeAllCallouts=function(){var b;for(b in a)a.hasOwnProperty(b)&&this.removeCallout(b)},this.removeCallout=function(b){var d=a[b];a[b]=null,c[b]=null,d&&d.destroy()},this.refreshCalloutPositions=function(){var b,d,e;for(b in a)a.hasOwnProperty(b)&&c.hasOwnProperty(b)&&(d=a[b],e=c[b],d&&e&&d.setPosition(e))}},a=function(a){var d,k,p,t,u,w,x,y,z=this,A={},B=[],C=function(a){return d&&d.element&&d.element.parentNode||(d=new b(p)),a&&h.extend(d.opt,{bubblePadding:E("bubblePadding"),bubbleWidth:E("bubbleWidth"),showNextButton:E("showNextButton"),showPrevButton:E("showPrevButton"),showCloseButton:E("showCloseButton"),arrowWidth:E("arrowWidth"),isRtl:E("isRtl")}),d},D=function(){d&&(d.destroy(),d=null)},E=function(a){return"undefined"==typeof p?l[a]:h.valOrDefault(p[a],l[a])},F=function(){var a;return a=!t||0>u||u>=t.steps.length?null:t.steps[u]},G=function(){z.nextStep()},H=function(a){var b,c,d,e,f,g,i=C(),j=i.element,k=h.getPixelValue(j.style.top),l=k+h.getPixelValue(j.offsetHeight),m=h.getStepTarget(F()),o=m.getBoundingClientRect(),p=o.top+h.getScrollTop(),r=o.bottom+h.getScrollTop(),t=p>k?k:p,u=l>r?l:r,v=h.getScrollTop(),w=v+h.getWindowHeight(),x=t-E("scrollTopMargin");t>=v&&(t<=v+E("scrollTopMargin")||w>=u)?a&&a():E("smoothScroll")?("undefined"==typeof YAHOO?"undefined":n(YAHOO))!==q&&n(YAHOO.env)!==q&&n(YAHOO.env.ua)!==q&&n(YAHOO.util)!==q&&n(YAHOO.util.Scroll)!==q?(b=YAHOO.env.ua.webkit?document.body:document.documentElement,d=YAHOO.util.Easing?YAHOO.util.Easing.easeOut:void 0,c=new YAHOO.util.Scroll(b,{scroll:{to:[0,x]}},E("scrollDuration")/1e3,d),c.onComplete.subscribe(a),c.animate()):s?jQuery("body, html").animate({scrollTop:x},E("scrollDuration"),a):(0>x&&(x=0),e=v>t?-1:1,f=Math.abs(v-x)/(E("scrollDuration")/10),(g=function(){var b=h.getScrollTop(),c=b+e*f;return e>0&&c>=x||0>e&&x>=c?(c=x,a&&a(),void window.scrollTo(0,c)):(window.scrollTo(0,c),h.getScrollTop()===b?void(a&&a()):void setTimeout(g,10))})()):(window.scrollTo(0,x),a&&a())},I=function P(a,b){var c,d,e;u+a>=0&&u+a<t.steps.length?(u+=a,d=F(),e=function(){c=h.getStepTarget(d),c?(A[u]&&delete A[u],b(u)):(A[u]=!0,h.invokeEventCallbacks("error"),P(a,b))},d.delay?setTimeout(e,d.delay):e()):b(-1)},J=function(a,b){var c,d,e,f,g=C(),i=this;if(g.hide(),a=h.valOrDefault(a,!0),c=F(),c.nextOnTargetClick&&h.removeEvtListener(h.getStepTarget(c),"click",G),d=c,e=b>0?d.multipage:u>0&&t.steps[u-1].multipage,f=function(c){var f;if(-1===c)return this.endTour(!0);if(a&&(f=b>0?h.invokeEventCallbacks("next",d.onNext):h.invokeEventCallbacks("prev",d.onPrev)),c===u){if(e)return void N();f=h.valOrDefault(f,!0),f?this.showStep(c):this.endTour(!1)}},!e&&E("skipIfNoElement"))I(b,function(a){f.call(i,a)});else if(u+b>=0&&u+b<t.steps.length){if(u+=b,c=F(),!h.getStepTarget(c)&&!e)return h.invokeEventCallbacks("error"),this.endTour(!0,!1);f.call(this,u)}else if(u+b===t.steps.length)return this.endTour();return this},K=function(a){var b,c,d,e={};for(b in a)a.hasOwnProperty(b)&&"id"!==b&&"steps"!==b&&(e[b]=a[b]);return y.call(this,e,!0),c=h.getState(E("cookieName")),c&&(d=c.split(":"),w=d[0],x=d[1],d.length>2&&(B=d[2].split(",")),x=parseInt(x,10)),this},L=function(a,b,c){var d,e;if(u=a||0,A=b||{},d=F(),e=h.getStepTarget(d))return void c(u);if(!e){if(h.invokeEventCallbacks("error"),A[u]=!0,E("skipIfNoElement"))return void I(1,c);u=-1,c(u)}},M=function(a){function b(){d.show(),h.invokeEventCallbacks("show",c.onShow)}var c=t.steps[a],d=C(),e=h.getStepTarget(c);u!==a&&F().nextOnTargetClick&&h.removeEvtListener(h.getStepTarget(F()),"click",G),u=a,d.hide(!1),d.render(c,a,function(a){a?H(b):b(),c.nextOnTargetClick&&h.addEvtListener(e,"click",G)}),N()},N=function(){var a=t.id+":"+u,b=m.getSkippedStepsIndexes();b&&b.length>0&&(a+=":"+b.join(",")),h.setState(E("cookieName"),a,1)},O=function(a){a&&this.configure(a)};this.getCalloutManager=function(){return("undefined"==typeof k?"undefined":n(k))===q&&(k=new c),k},this.startTour=function(a,b){var c,d,e={},f=this;if(!t){if(!a)throw new Error("Tour data is required for startTour.");if(!a.id||!v.test(a.id))throw new Error("Tour ID is using an invalid format. Use alphanumeric, underscores, and/or hyphens only. First character must be a letter.");t=a,K.call(this,a)}if(("undefined"==typeof b?"undefined":n(b))!==q){if(b>=t.steps.length)throw new Error("Specified step number out of bounds.");d=b}if(!h.documentIsReady())return r=!0,this;if("undefined"==typeof d&&t.id===w&&("undefined"==typeof x?"undefined":n(x))!==q){if(d=x,B.length>0)for(var g=0,i=B.length;i>g;g++)e[B[g]]=!0}else d||(d=0);return L(d,e,function(a){var b=-1!==a&&h.getStepTarget(t.steps[a]);return b?(h.invokeEventCallbacks("start"),c=C(),c.hide(!1),f.isActive=!0,void(h.getStepTarget(F())?f.showStep(a):(h.invokeEventCallbacks("error"),E("skipIfNoElement")&&f.nextStep(!1)))):void f.endTour(!1,!1)}),this},this.showStep=function(a){var b=t.steps[a],c=u;return h.getStepTarget(b)?(b.delay?setTimeout(function(){M(a)},b.delay):M(a),this):(u=a,h.invokeEventCallbacks("error"),void(u=c))},this.prevStep=function(a){return J.call(this,a,-1),this},this.nextStep=function(a){return J.call(this,a,1),this},this.endTour=function(a,b){var c,d=C();return a=h.valOrDefault(a,!0),b=h.valOrDefault(b,!0),t&&(c=F(),c&&c.nextOnTargetClick&&h.removeEvtListener(h.getStepTarget(c),"click",G)),u=0,x=void 0,d.hide(),a&&h.clearState(E("cookieName")),this.isActive&&(this.isActive=!1,t&&b&&h.invokeEventCallbacks("end")),this.removeCallbacks(null,!0),this.resetDefaultOptions(),D(),t=null,this},this.getCurrTour=function(){return t},this.getCurrTarget=function(){return h.getStepTarget(F())},this.getCurrStepNum=function(){return u},this.getSkippedStepsIndexes=function(){var a,b=[];for(a in A)b.push(a);return b},this.refreshBubblePosition=function(){var a=F();return a&&C().setPosition(a),this.getCalloutManager().refreshCalloutPositions(),this},this.listen=function(a,b,c){return a&&i[a].push({cb:b,fromTour:c}),this},this.unlisten=function(a,b){var c,d,e=i[a];for(c=0,d=e.length;d>c;++c)e[c].cb===b&&e.splice(c,1);return this},this.removeCallbacks=function(a,b){var c,d,e,f;for(f in i)if(!a||a===f)if(b)for(c=i[f],d=0,e=c.length;e>d;++d)c[d].fromTour&&(c.splice(d--,1),--e);else i[f]=[];return this},this.registerHelper=function(a,b){"string"==typeof a&&"function"==typeof b&&(j[a]=b)},this.unregisterHelper=function(a){j[a]=null},this.invokeHelper=function(a){var b,c,d=[];for(b=1,c=arguments.length;c>b;++b)d.push(arguments[b]);j[a]&&j[a].call(null,d)},this.setCookieName=function(a){return p.cookieName=a,this},this.resetDefaultOptions=function(){return p={},this},this.resetDefaultI18N=function(){return e={},this},this.getState=function(){return h.getState(E("cookieName"))},y=function(a,b){var c,d,f,g,i=["next","prev","start","end","show","error","close"];for(p||this.resetDefaultOptions(),h.extend(p,a),a&&h.extend(e,a.i18n),f=0,g=i.length;g>f;++f)d="on"+i[f].charAt(0).toUpperCase()+i[f].substring(1),a[d]&&this.listen(i[f],a[d],b);return c=C(!0),this},this.configure=function(a){return y.call(this,a,!1)},this.setRenderer=function(a){var b="undefined"==typeof a?"undefined":n(a);return"string"===b?(o=a,f=void 0):"function"===b&&(f=a),this},this.setEscaper=function(a){return"function"==typeof a&&(g=a),this},O.call(this,a)},m=new a,function(){var a={};a.escape=function(a){return g?g(a):null==a?"":(""+a).replace(new RegExp("[&<>\"']","g"),function(a){return"&"==a?"&amp;":"<"==a?"&lt;":">"==a?"&gt;":'"'==a?"&quot;":"'"==a?"&#x27;":void 0})},this.templates=this.templates||{},this.templates.bubble_default=function(b){function c(b,c){return c?a.escape(b):b}var d,e="";a.escape,Array.prototype.join;e+="\n";var f=b.i18n,g=b.buttons,h=b.step,i=b.tour;return e+='\n<div class="hopscotch-bubble-container" style="width: '+(null==(d=h.width)?"":d)+"px; padding: "+(null==(d=h.padding)?"":d)+'px;">\n  ',i.isTour&&(e+='<span class="hopscotch-bubble-number">'+(null==(d=f.stepNum)?"":d)+"</span>"),e+='\n  <div class="hopscotch-bubble-content">\n    ',""!==h.title&&(e+='<h3 class="hopscotch-title">'+(null==(d=c(h.title,i.unsafe))?"":d)+"</h3>"),e+="\n    ",""!==h.content&&(e+='<div class="hopscotch-content">'+(null==(d=c(h.content,i.unsafe))?"":d)+"</div>"),e+='\n  </div>\n  <div class="hopscotch-actions">\n    ',g.showPrev&&(e+='<button class="hopscotch-nav-button prev hopscotch-prev">'+(null==(d=f.prevBtn)?"":d)+"</button>"),e+="\n    ",g.showCTA&&(e+='<button class="hopscotch-nav-button next hopscotch-cta">'+(null==(d=g.ctaLabel)?"":d)+"</button>"),e+="\n    ",g.showNext&&(e+='<button class="hopscotch-nav-button next hopscotch-next">'+(null==(d=f.nextBtn)?"":d)+"</button>"),e+="\n  </div>\n  ",g.showClose&&(e+='<button class="hopscotch-bubble-close hopscotch-close">'+(null==(d=f.closeTooltip)?"":d)+"</button>"),e+='\n</div>\n<div class="hopscotch-bubble-arrow-container hopscotch-arrow">\n  <div class="hopscotch-bubble-arrow-border"></div>\n  <div class="hopscotch-bubble-arrow"></div>\n</div>\n'}}.call(m);var y=m;return y});
 },{}],13:[function(require,module,exports){
 /*! jQuery UI - v1.11.0pre - 2013-09-27
 * http://jqueryui.com
@@ -57565,4 +55582,6 @@ var escapeCharacters_callback = function(wholeMatch,m1) {
     return ReconnectingWebSocket;
 });
 
+},{}],22:[function(require,module,exports){
+!function(t,e){"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.swal=e():t.swal=e()}(this,function(){return function(t){function e(o){if(n[o])return n[o].exports;var r=n[o]={i:o,l:!1,exports:{}};return t[o].call(r.exports,r,r.exports,e),r.l=!0,r.exports}var n={};return e.m=t,e.c=n,e.d=function(t,n,o){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:o})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=8)}([function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o="swal-button";e.CLASS_NAMES={MODAL:"swal-modal",OVERLAY:"swal-overlay",SHOW_MODAL:"swal-overlay--show-modal",MODAL_TITLE:"swal-title",MODAL_TEXT:"swal-text",ICON:"swal-icon",ICON_CUSTOM:"swal-icon--custom",CONTENT:"swal-content",FOOTER:"swal-footer",BUTTON_CONTAINER:"swal-button-container",BUTTON:o,CONFIRM_BUTTON:o+"--confirm",CANCEL_BUTTON:o+"--cancel",DANGER_BUTTON:o+"--danger",BUTTON_LOADING:o+"--loading",BUTTON_LOADER:o+"__loader"},e.default=e.CLASS_NAMES},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0}),e.getNode=function(t){var e="."+t;return document.querySelector(e)},e.stringToNode=function(t){var e=document.createElement("div");return e.innerHTML=t.trim(),e.firstChild},e.insertAfter=function(t,e){var n=e.nextSibling;e.parentNode.insertBefore(t,n)},e.removeNode=function(t){t.parentElement.removeChild(t)},e.throwErr=function(t){throw t=t.replace(/ +(?= )/g,""),"SweetAlert: "+(t=t.trim())},e.isPlainObject=function(t){if("[object Object]"!==Object.prototype.toString.call(t))return!1;var e=Object.getPrototypeOf(t);return null===e||e===Object.prototype},e.ordinalSuffixOf=function(t){var e=t%10,n=t%100;return 1===e&&11!==n?t+"st":2===e&&12!==n?t+"nd":3===e&&13!==n?t+"rd":t+"th"}},function(t,e,n){"use strict";function o(t){for(var n in t)e.hasOwnProperty(n)||(e[n]=t[n])}Object.defineProperty(e,"__esModule",{value:!0}),o(n(25));var r=n(26);e.overlayMarkup=r.default,o(n(27)),o(n(28)),o(n(29));var i=n(0),a=i.default.MODAL_TITLE,s=i.default.MODAL_TEXT,c=i.default.ICON,l=i.default.FOOTER;e.iconMarkup='\n  <div class="'+c+'"></div>',e.titleMarkup='\n  <div class="'+a+'"></div>\n',e.textMarkup='\n  <div class="'+s+'"></div>',e.footerMarkup='\n  <div class="'+l+'"></div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1);e.CONFIRM_KEY="confirm",e.CANCEL_KEY="cancel";var r={visible:!0,text:null,value:null,className:"",closeModal:!0},i=Object.assign({},r,{visible:!1,text:"Cancel",value:null}),a=Object.assign({},r,{text:"OK",value:!0});e.defaultButtonList={cancel:i,confirm:a};var s=function(t){switch(t){case e.CONFIRM_KEY:return a;case e.CANCEL_KEY:return i;default:var n=t.charAt(0).toUpperCase()+t.slice(1);return Object.assign({},r,{text:n,value:t})}},c=function(t,e){var n=s(t);return!0===e?Object.assign({},n,{visible:!0}):"string"==typeof e?Object.assign({},n,{visible:!0,text:e}):o.isPlainObject(e)?Object.assign({visible:!0},n,e):Object.assign({},n,{visible:!1})},l=function(t){for(var e={},n=0,o=Object.keys(t);n<o.length;n++){var r=o[n],a=t[r],s=c(r,a);e[r]=s}return e.cancel||(e.cancel=i),e},u=function(t){var n={};switch(t.length){case 1:n[e.CANCEL_KEY]=Object.assign({},i,{visible:!1});break;case 2:n[e.CANCEL_KEY]=c(e.CANCEL_KEY,t[0]),n[e.CONFIRM_KEY]=c(e.CONFIRM_KEY,t[1]);break;default:o.throwErr("Invalid number of 'buttons' in array ("+t.length+").\n      If you want more than 2 buttons, you need to use an object!")}return n};e.getButtonListOpts=function(t){var n=e.defaultButtonList;return"string"==typeof t?n[e.CONFIRM_KEY]=c(e.CONFIRM_KEY,t):Array.isArray(t)?n=u(t):o.isPlainObject(t)?n=l(t):!0===t?n=u([!0,!0]):!1===t?n=u([!1,!1]):void 0===t&&(n=e.defaultButtonList),n}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(2),i=n(0),a=i.default.MODAL,s=i.default.OVERLAY,c=n(30),l=n(31),u=n(32),f=n(33);e.injectElIntoModal=function(t){var e=o.getNode(a),n=o.stringToNode(t);return e.appendChild(n),n};var d=function(t){t.className=a,t.textContent=""},p=function(t,e){d(t);var n=e.className;n&&t.classList.add(n)};e.initModalContent=function(t){var e=o.getNode(a);p(e,t),c.default(t.icon),l.initTitle(t.title),l.initText(t.text),f.default(t.content),u.default(t.buttons,t.dangerMode)};var m=function(){var t=o.getNode(s),e=o.stringToNode(r.modalMarkup);t.appendChild(e)};e.default=m},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(3),r={isOpen:!1,promise:null,actions:{},timer:null},i=Object.assign({},r);e.resetState=function(){i=Object.assign({},r)},e.setActionValue=function(t){if("string"==typeof t)return a(o.CONFIRM_KEY,t);for(var e in t)a(e,t[e])};var a=function(t,e){i.actions[t]||(i.actions[t]={}),Object.assign(i.actions[t],{value:e})};e.setActionOptionsFor=function(t,e){var n=(void 0===e?{}:e).closeModal,o=void 0===n||n;Object.assign(i.actions[t],{closeModal:o})},e.default=i},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(3),i=n(0),a=i.default.OVERLAY,s=i.default.SHOW_MODAL,c=i.default.BUTTON,l=i.default.BUTTON_LOADING,u=n(5);e.openModal=function(){o.getNode(a).classList.add(s),u.default.isOpen=!0};var f=function(){o.getNode(a).classList.remove(s),u.default.isOpen=!1};e.onAction=function(t){void 0===t&&(t=r.CANCEL_KEY);var e=u.default.actions[t],n=e.value;if(!1===e.closeModal){var i=c+"--"+t;o.getNode(i).classList.add(l)}else f();u.default.promise.resolve(n)},e.getState=function(){var t=Object.assign({},u.default);return delete t.promise,delete t.timer,t},e.stopLoading=function(){for(var t=document.querySelectorAll("."+c),e=0;e<t.length;e++){t[e].classList.remove(l)}}},function(t,e){var n;n=function(){return this}();try{n=n||Function("return this")()||(0,eval)("this")}catch(t){"object"==typeof window&&(n=window)}t.exports=n},function(t,e,n){(function(e){t.exports=e.sweetAlert=n(9)}).call(e,n(7))},function(t,e,n){(function(e){t.exports=e.swal=n(10)}).call(e,n(7))},function(t,e,n){"undefined"!=typeof window&&n(11),n(16);var o=n(23).default;t.exports=o},function(t,e,n){var o=n(12);"string"==typeof o&&(o=[[t.i,o,""]]);var r={insertAt:"top"};r.transform=void 0;n(14)(o,r);o.locals&&(t.exports=o.locals)},function(t,e,n){e=t.exports=n(13)(void 0),e.push([t.i,'.swal-icon--error{border-color:#f27474;-webkit-animation:animateErrorIcon .5s;animation:animateErrorIcon .5s}.swal-icon--error__x-mark{position:relative;display:block;-webkit-animation:animateXMark .5s;animation:animateXMark .5s}.swal-icon--error__line{position:absolute;height:5px;width:47px;background-color:#f27474;display:block;top:37px;border-radius:2px}.swal-icon--error__line--left{-webkit-transform:rotate(45deg);transform:rotate(45deg);left:17px}.swal-icon--error__line--right{-webkit-transform:rotate(-45deg);transform:rotate(-45deg);right:16px}@-webkit-keyframes animateErrorIcon{0%{-webkit-transform:rotateX(100deg);transform:rotateX(100deg);opacity:0}to{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);opacity:1}}@keyframes animateErrorIcon{0%{-webkit-transform:rotateX(100deg);transform:rotateX(100deg);opacity:0}to{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);opacity:1}}@-webkit-keyframes animateXMark{0%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}50%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}80%{-webkit-transform:scale(1.15);transform:scale(1.15);margin-top:-6px}to{-webkit-transform:scale(1);transform:scale(1);margin-top:0;opacity:1}}@keyframes animateXMark{0%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}50%{-webkit-transform:scale(.4);transform:scale(.4);margin-top:26px;opacity:0}80%{-webkit-transform:scale(1.15);transform:scale(1.15);margin-top:-6px}to{-webkit-transform:scale(1);transform:scale(1);margin-top:0;opacity:1}}.swal-icon--warning{border-color:#f8bb86;-webkit-animation:pulseWarning .75s infinite alternate;animation:pulseWarning .75s infinite alternate}.swal-icon--warning__body{width:5px;height:47px;top:10px;border-radius:2px;margin-left:-2px}.swal-icon--warning__body,.swal-icon--warning__dot{position:absolute;left:50%;background-color:#f8bb86}.swal-icon--warning__dot{width:7px;height:7px;border-radius:50%;margin-left:-4px;bottom:-11px}@-webkit-keyframes pulseWarning{0%{border-color:#f8d486}to{border-color:#f8bb86}}@keyframes pulseWarning{0%{border-color:#f8d486}to{border-color:#f8bb86}}.swal-icon--success{border-color:#a5dc86}.swal-icon--success:after,.swal-icon--success:before{content:"";border-radius:50%;position:absolute;width:60px;height:120px;background:#fff;-webkit-transform:rotate(45deg);transform:rotate(45deg)}.swal-icon--success:before{border-radius:120px 0 0 120px;top:-7px;left:-33px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-transform-origin:60px 60px;transform-origin:60px 60px}.swal-icon--success:after{border-radius:0 120px 120px 0;top:-11px;left:30px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-transform-origin:0 60px;transform-origin:0 60px;-webkit-animation:rotatePlaceholder 4.25s ease-in;animation:rotatePlaceholder 4.25s ease-in}.swal-icon--success__ring{width:80px;height:80px;border:4px solid hsla(98,55%,69%,.2);border-radius:50%;box-sizing:content-box;position:absolute;left:-4px;top:-4px;z-index:2}.swal-icon--success__hide-corners{width:5px;height:90px;background-color:#fff;padding:1px;position:absolute;left:28px;top:8px;z-index:1;-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}.swal-icon--success__line{height:5px;background-color:#a5dc86;display:block;border-radius:2px;position:absolute;z-index:2}.swal-icon--success__line--tip{width:25px;left:14px;top:46px;-webkit-transform:rotate(45deg);transform:rotate(45deg);-webkit-animation:animateSuccessTip .75s;animation:animateSuccessTip .75s}.swal-icon--success__line--long{width:47px;right:8px;top:38px;-webkit-transform:rotate(-45deg);transform:rotate(-45deg);-webkit-animation:animateSuccessLong .75s;animation:animateSuccessLong .75s}@-webkit-keyframes rotatePlaceholder{0%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}5%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}12%{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}to{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}}@keyframes rotatePlaceholder{0%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}5%{-webkit-transform:rotate(-45deg);transform:rotate(-45deg)}12%{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}to{-webkit-transform:rotate(-405deg);transform:rotate(-405deg)}}@-webkit-keyframes animateSuccessTip{0%{width:0;left:1px;top:19px}54%{width:0;left:1px;top:19px}70%{width:50px;left:-8px;top:37px}84%{width:17px;left:21px;top:48px}to{width:25px;left:14px;top:45px}}@keyframes animateSuccessTip{0%{width:0;left:1px;top:19px}54%{width:0;left:1px;top:19px}70%{width:50px;left:-8px;top:37px}84%{width:17px;left:21px;top:48px}to{width:25px;left:14px;top:45px}}@-webkit-keyframes animateSuccessLong{0%{width:0;right:46px;top:54px}65%{width:0;right:46px;top:54px}84%{width:55px;right:0;top:35px}to{width:47px;right:8px;top:38px}}@keyframes animateSuccessLong{0%{width:0;right:46px;top:54px}65%{width:0;right:46px;top:54px}84%{width:55px;right:0;top:35px}to{width:47px;right:8px;top:38px}}.swal-icon--info{border-color:#c9dae1}.swal-icon--info:before{width:5px;height:29px;bottom:17px;border-radius:2px;margin-left:-2px}.swal-icon--info:after,.swal-icon--info:before{content:"";position:absolute;left:50%;background-color:#c9dae1}.swal-icon--info:after{width:7px;height:7px;border-radius:50%;margin-left:-3px;top:19px}.swal-icon{width:80px;height:80px;border-width:4px;border-style:solid;border-radius:50%;padding:0;position:relative;box-sizing:content-box;margin:20px auto}.swal-icon:first-child{margin-top:32px}.swal-icon--custom{width:auto;height:auto;max-width:100%;border:none;border-radius:0}.swal-icon img{max-width:100%;max-height:100%}.swal-title{color:rgba(0,0,0,.65);font-weight:600;text-transform:none;position:relative;display:block;padding:13px 16px;font-size:27px;line-height:normal;text-align:center;margin-bottom:0}.swal-title:first-child{margin-top:26px}.swal-title:not(:first-child){padding-bottom:0}.swal-title:not(:last-child){margin-bottom:13px}.swal-text{font-size:16px;position:relative;float:none;line-height:normal;vertical-align:top;text-align:left;display:inline-block;margin:0;padding:0 10px;font-weight:400;color:rgba(0,0,0,.64);max-width:calc(100% - 20px);overflow-wrap:break-word;box-sizing:border-box}.swal-text:first-child{margin-top:45px}.swal-text:last-child{margin-bottom:45px}.swal-footer{text-align:right;padding-top:13px;margin-top:13px;padding:13px 16px;border-radius:inherit;border-top-left-radius:0;border-top-right-radius:0}.swal-button-container{margin:5px;display:inline-block;position:relative}.swal-button{background-color:#7cd1f9;color:#fff;border:none;box-shadow:none;border-radius:5px;font-weight:600;font-size:14px;padding:10px 24px;margin:0;cursor:pointer}.swal-button[not:disabled]:hover{background-color:#78cbf2}.swal-button:active{background-color:#70bce0}.swal-button:focus{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(43,114,165,.29)}.swal-button[disabled]{opacity:.5;cursor:default}.swal-button::-moz-focus-inner{border:0}.swal-button--cancel{color:#555;background-color:#efefef}.swal-button--cancel[not:disabled]:hover{background-color:#e8e8e8}.swal-button--cancel:active{background-color:#d7d7d7}.swal-button--cancel:focus{box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(116,136,150,.29)}.swal-button--danger{background-color:#e64942}.swal-button--danger[not:disabled]:hover{background-color:#df4740}.swal-button--danger:active{background-color:#cf423b}.swal-button--danger:focus{box-shadow:0 0 0 1px #fff,0 0 0 3px rgba(165,43,43,.29)}.swal-content{padding:0 20px;margin-top:20px;font-size:medium}.swal-content:last-child{margin-bottom:20px}.swal-content__input,.swal-content__textarea{-webkit-appearance:none;background-color:#fff;border:none;font-size:14px;display:block;box-sizing:border-box;width:100%;border:1px solid rgba(0,0,0,.14);padding:10px 13px;border-radius:2px;transition:border-color .2s}.swal-content__input:focus,.swal-content__textarea:focus{outline:none;border-color:#6db8ff}.swal-content__textarea{resize:vertical}.swal-button--loading{color:transparent}.swal-button--loading~.swal-button__loader{opacity:1}.swal-button__loader{position:absolute;height:auto;width:43px;z-index:2;left:50%;top:50%;-webkit-transform:translateX(-50%) translateY(-50%);transform:translateX(-50%) translateY(-50%);text-align:center;pointer-events:none;opacity:0}.swal-button__loader div{display:inline-block;float:none;vertical-align:baseline;width:9px;height:9px;padding:0;border:none;margin:2px;opacity:.4;border-radius:7px;background-color:hsla(0,0%,100%,.9);transition:background .2s;-webkit-animation:swal-loading-anim 1s infinite;animation:swal-loading-anim 1s infinite}.swal-button__loader div:nth-child(3n+2){-webkit-animation-delay:.15s;animation-delay:.15s}.swal-button__loader div:nth-child(3n+3){-webkit-animation-delay:.3s;animation-delay:.3s}@-webkit-keyframes swal-loading-anim{0%{opacity:.4}20%{opacity:.4}50%{opacity:1}to{opacity:.4}}@keyframes swal-loading-anim{0%{opacity:.4}20%{opacity:.4}50%{opacity:1}to{opacity:.4}}.swal-overlay{position:fixed;top:0;bottom:0;left:0;right:0;text-align:center;font-size:0;overflow-y:auto;background-color:rgba(0,0,0,.4);z-index:10000;pointer-events:none;opacity:0;transition:opacity .3s}.swal-overlay:before{content:" ";display:inline-block;vertical-align:middle;height:100%}.swal-overlay--show-modal{opacity:1;pointer-events:auto}.swal-overlay--show-modal .swal-modal{opacity:1;pointer-events:auto;box-sizing:border-box;-webkit-animation:showSweetAlert .3s;animation:showSweetAlert .3s;will-change:transform}.swal-modal{width:478px;opacity:0;pointer-events:none;background-color:#fff;text-align:center;border-radius:5px;position:static;margin:20px auto;display:inline-block;vertical-align:middle;-webkit-transform:scale(1);transform:scale(1);-webkit-transform-origin:50% 50%;transform-origin:50% 50%;z-index:10001;transition:opacity .2s,-webkit-transform .3s;transition:transform .3s,opacity .2s;transition:transform .3s,opacity .2s,-webkit-transform .3s}@media (max-width:500px){.swal-modal{width:calc(100% - 20px)}}@-webkit-keyframes showSweetAlert{0%{-webkit-transform:scale(1);transform:scale(1)}1%{-webkit-transform:scale(.5);transform:scale(.5)}45%{-webkit-transform:scale(1.05);transform:scale(1.05)}80%{-webkit-transform:scale(.95);transform:scale(.95)}to{-webkit-transform:scale(1);transform:scale(1)}}@keyframes showSweetAlert{0%{-webkit-transform:scale(1);transform:scale(1)}1%{-webkit-transform:scale(.5);transform:scale(.5)}45%{-webkit-transform:scale(1.05);transform:scale(1.05)}80%{-webkit-transform:scale(.95);transform:scale(.95)}to{-webkit-transform:scale(1);transform:scale(1)}}',""])},function(t,e){function n(t,e){var n=t[1]||"",r=t[3];if(!r)return n;if(e&&"function"==typeof btoa){var i=o(r);return[n].concat(r.sources.map(function(t){return"/*# sourceURL="+r.sourceRoot+t+" */"})).concat([i]).join("\n")}return[n].join("\n")}function o(t){return"/*# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(unescape(encodeURIComponent(JSON.stringify(t))))+" */"}t.exports=function(t){var e=[];return e.toString=function(){return this.map(function(e){var o=n(e,t);return e[2]?"@media "+e[2]+"{"+o+"}":o}).join("")},e.i=function(t,n){"string"==typeof t&&(t=[[null,t,""]]);for(var o={},r=0;r<this.length;r++){var i=this[r][0];"number"==typeof i&&(o[i]=!0)}for(r=0;r<t.length;r++){var a=t[r];"number"==typeof a[0]&&o[a[0]]||(n&&!a[2]?a[2]=n:n&&(a[2]="("+a[2]+") and ("+n+")"),e.push(a))}},e}},function(t,e,n){function o(t,e){for(var n=0;n<t.length;n++){var o=t[n],r=m[o.id];if(r){r.refs++;for(var i=0;i<r.parts.length;i++)r.parts[i](o.parts[i]);for(;i<o.parts.length;i++)r.parts.push(u(o.parts[i],e))}else{for(var a=[],i=0;i<o.parts.length;i++)a.push(u(o.parts[i],e));m[o.id]={id:o.id,refs:1,parts:a}}}}function r(t,e){for(var n=[],o={},r=0;r<t.length;r++){var i=t[r],a=e.base?i[0]+e.base:i[0],s=i[1],c=i[2],l=i[3],u={css:s,media:c,sourceMap:l};o[a]?o[a].parts.push(u):n.push(o[a]={id:a,parts:[u]})}return n}function i(t,e){var n=v(t.insertInto);if(!n)throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");var o=w[w.length-1];if("top"===t.insertAt)o?o.nextSibling?n.insertBefore(e,o.nextSibling):n.appendChild(e):n.insertBefore(e,n.firstChild),w.push(e);else{if("bottom"!==t.insertAt)throw new Error("Invalid value for parameter 'insertAt'. Must be 'top' or 'bottom'.");n.appendChild(e)}}function a(t){if(null===t.parentNode)return!1;t.parentNode.removeChild(t);var e=w.indexOf(t);e>=0&&w.splice(e,1)}function s(t){var e=document.createElement("style");return t.attrs.type="text/css",l(e,t.attrs),i(t,e),e}function c(t){var e=document.createElement("link");return t.attrs.type="text/css",t.attrs.rel="stylesheet",l(e,t.attrs),i(t,e),e}function l(t,e){Object.keys(e).forEach(function(n){t.setAttribute(n,e[n])})}function u(t,e){var n,o,r,i;if(e.transform&&t.css){if(!(i=e.transform(t.css)))return function(){};t.css=i}if(e.singleton){var l=h++;n=g||(g=s(e)),o=f.bind(null,n,l,!1),r=f.bind(null,n,l,!0)}else t.sourceMap&&"function"==typeof URL&&"function"==typeof URL.createObjectURL&&"function"==typeof URL.revokeObjectURL&&"function"==typeof Blob&&"function"==typeof btoa?(n=c(e),o=p.bind(null,n,e),r=function(){a(n),n.href&&URL.revokeObjectURL(n.href)}):(n=s(e),o=d.bind(null,n),r=function(){a(n)});return o(t),function(e){if(e){if(e.css===t.css&&e.media===t.media&&e.sourceMap===t.sourceMap)return;o(t=e)}else r()}}function f(t,e,n,o){var r=n?"":o.css;if(t.styleSheet)t.styleSheet.cssText=x(e,r);else{var i=document.createTextNode(r),a=t.childNodes;a[e]&&t.removeChild(a[e]),a.length?t.insertBefore(i,a[e]):t.appendChild(i)}}function d(t,e){var n=e.css,o=e.media;if(o&&t.setAttribute("media",o),t.styleSheet)t.styleSheet.cssText=n;else{for(;t.firstChild;)t.removeChild(t.firstChild);t.appendChild(document.createTextNode(n))}}function p(t,e,n){var o=n.css,r=n.sourceMap,i=void 0===e.convertToAbsoluteUrls&&r;(e.convertToAbsoluteUrls||i)&&(o=y(o)),r&&(o+="\n/*# sourceMappingURL=data:application/json;base64,"+btoa(unescape(encodeURIComponent(JSON.stringify(r))))+" */");var a=new Blob([o],{type:"text/css"}),s=t.href;t.href=URL.createObjectURL(a),s&&URL.revokeObjectURL(s)}var m={},b=function(t){var e;return function(){return void 0===e&&(e=t.apply(this,arguments)),e}}(function(){return window&&document&&document.all&&!window.atob}),v=function(t){var e={};return function(n){return void 0===e[n]&&(e[n]=t.call(this,n)),e[n]}}(function(t){return document.querySelector(t)}),g=null,h=0,w=[],y=n(15);t.exports=function(t,e){if("undefined"!=typeof DEBUG&&DEBUG&&"object"!=typeof document)throw new Error("The style-loader cannot be used in a non-browser environment");e=e||{},e.attrs="object"==typeof e.attrs?e.attrs:{},e.singleton||(e.singleton=b()),e.insertInto||(e.insertInto="head"),e.insertAt||(e.insertAt="bottom");var n=r(t,e);return o(n,e),function(t){for(var i=[],a=0;a<n.length;a++){var s=n[a],c=m[s.id];c.refs--,i.push(c)}if(t){o(r(t,e),e)}for(var a=0;a<i.length;a++){var c=i[a];if(0===c.refs){for(var l=0;l<c.parts.length;l++)c.parts[l]();delete m[c.id]}}}};var x=function(){var t=[];return function(e,n){return t[e]=n,t.filter(Boolean).join("\n")}}()},function(t,e){t.exports=function(t){var e="undefined"!=typeof window&&window.location;if(!e)throw new Error("fixUrls requires window.location");if(!t||"string"!=typeof t)return t;var n=e.protocol+"//"+e.host,o=n+e.pathname.replace(/\/[^\/]*$/,"/");return t.replace(/url\s*\(((?:[^)(]|\((?:[^)(]+|\([^)(]*\))*\))*)\)/gi,function(t,e){var r=e.trim().replace(/^"(.*)"$/,function(t,e){return e}).replace(/^'(.*)'$/,function(t,e){return e});if(/^(#|data:|http:\/\/|https:\/\/|file:\/\/\/)/i.test(r))return t;var i;return i=0===r.indexOf("//")?r:0===r.indexOf("/")?n+r:o+r.replace(/^\.\//,""),"url("+JSON.stringify(i)+")"})}},function(t,e,n){var o=n(17);"undefined"==typeof window||window.Promise||(window.Promise=o),n(21),String.prototype.includes||(String.prototype.includes=function(t,e){"use strict";return"number"!=typeof e&&(e=0),!(e+t.length>this.length)&&-1!==this.indexOf(t,e)}),Array.prototype.includes||Object.defineProperty(Array.prototype,"includes",{value:function(t,e){if(null==this)throw new TypeError('"this" is null or not defined');var n=Object(this),o=n.length>>>0;if(0===o)return!1;for(var r=0|e,i=Math.max(r>=0?r:o-Math.abs(r),0);i<o;){if(function(t,e){return t===e||"number"==typeof t&&"number"==typeof e&&isNaN(t)&&isNaN(e)}(n[i],t))return!0;i++}return!1}}),"undefined"!=typeof window&&function(t){t.forEach(function(t){t.hasOwnProperty("remove")||Object.defineProperty(t,"remove",{configurable:!0,enumerable:!0,writable:!0,value:function(){this.parentNode.removeChild(this)}})})}([Element.prototype,CharacterData.prototype,DocumentType.prototype])},function(t,e,n){(function(e){!function(n){function o(){}function r(t,e){return function(){t.apply(e,arguments)}}function i(t){if("object"!=typeof this)throw new TypeError("Promises must be constructed via new");if("function"!=typeof t)throw new TypeError("not a function");this._state=0,this._handled=!1,this._value=void 0,this._deferreds=[],f(t,this)}function a(t,e){for(;3===t._state;)t=t._value;if(0===t._state)return void t._deferreds.push(e);t._handled=!0,i._immediateFn(function(){var n=1===t._state?e.onFulfilled:e.onRejected;if(null===n)return void(1===t._state?s:c)(e.promise,t._value);var o;try{o=n(t._value)}catch(t){return void c(e.promise,t)}s(e.promise,o)})}function s(t,e){try{if(e===t)throw new TypeError("A promise cannot be resolved with itself.");if(e&&("object"==typeof e||"function"==typeof e)){var n=e.then;if(e instanceof i)return t._state=3,t._value=e,void l(t);if("function"==typeof n)return void f(r(n,e),t)}t._state=1,t._value=e,l(t)}catch(e){c(t,e)}}function c(t,e){t._state=2,t._value=e,l(t)}function l(t){2===t._state&&0===t._deferreds.length&&i._immediateFn(function(){t._handled||i._unhandledRejectionFn(t._value)});for(var e=0,n=t._deferreds.length;e<n;e++)a(t,t._deferreds[e]);t._deferreds=null}function u(t,e,n){this.onFulfilled="function"==typeof t?t:null,this.onRejected="function"==typeof e?e:null,this.promise=n}function f(t,e){var n=!1;try{t(function(t){n||(n=!0,s(e,t))},function(t){n||(n=!0,c(e,t))})}catch(t){if(n)return;n=!0,c(e,t)}}var d=setTimeout;i.prototype.catch=function(t){return this.then(null,t)},i.prototype.then=function(t,e){var n=new this.constructor(o);return a(this,new u(t,e,n)),n},i.all=function(t){var e=Array.prototype.slice.call(t);return new i(function(t,n){function o(i,a){try{if(a&&("object"==typeof a||"function"==typeof a)){var s=a.then;if("function"==typeof s)return void s.call(a,function(t){o(i,t)},n)}e[i]=a,0==--r&&t(e)}catch(t){n(t)}}if(0===e.length)return t([]);for(var r=e.length,i=0;i<e.length;i++)o(i,e[i])})},i.resolve=function(t){return t&&"object"==typeof t&&t.constructor===i?t:new i(function(e){e(t)})},i.reject=function(t){return new i(function(e,n){n(t)})},i.race=function(t){return new i(function(e,n){for(var o=0,r=t.length;o<r;o++)t[o].then(e,n)})},i._immediateFn="function"==typeof e&&function(t){e(t)}||function(t){d(t,0)},i._unhandledRejectionFn=function(t){"undefined"!=typeof console&&console&&console.warn("Possible Unhandled Promise Rejection:",t)},i._setImmediateFn=function(t){i._immediateFn=t},i._setUnhandledRejectionFn=function(t){i._unhandledRejectionFn=t},void 0!==t&&t.exports?t.exports=i:n.Promise||(n.Promise=i)}(this)}).call(e,n(18).setImmediate)},function(t,e,n){function o(t,e){this._id=t,this._clearFn=e}var r=Function.prototype.apply;e.setTimeout=function(){return new o(r.call(setTimeout,window,arguments),clearTimeout)},e.setInterval=function(){return new o(r.call(setInterval,window,arguments),clearInterval)},e.clearTimeout=e.clearInterval=function(t){t&&t.close()},o.prototype.unref=o.prototype.ref=function(){},o.prototype.close=function(){this._clearFn.call(window,this._id)},e.enroll=function(t,e){clearTimeout(t._idleTimeoutId),t._idleTimeout=e},e.unenroll=function(t){clearTimeout(t._idleTimeoutId),t._idleTimeout=-1},e._unrefActive=e.active=function(t){clearTimeout(t._idleTimeoutId);var e=t._idleTimeout;e>=0&&(t._idleTimeoutId=setTimeout(function(){t._onTimeout&&t._onTimeout()},e))},n(19),e.setImmediate=setImmediate,e.clearImmediate=clearImmediate},function(t,e,n){(function(t,e){!function(t,n){"use strict";function o(t){"function"!=typeof t&&(t=new Function(""+t));for(var e=new Array(arguments.length-1),n=0;n<e.length;n++)e[n]=arguments[n+1];var o={callback:t,args:e};return l[c]=o,s(c),c++}function r(t){delete l[t]}function i(t){var e=t.callback,o=t.args;switch(o.length){case 0:e();break;case 1:e(o[0]);break;case 2:e(o[0],o[1]);break;case 3:e(o[0],o[1],o[2]);break;default:e.apply(n,o)}}function a(t){if(u)setTimeout(a,0,t);else{var e=l[t];if(e){u=!0;try{i(e)}finally{r(t),u=!1}}}}if(!t.setImmediate){var s,c=1,l={},u=!1,f=t.document,d=Object.getPrototypeOf&&Object.getPrototypeOf(t);d=d&&d.setTimeout?d:t,"[object process]"==={}.toString.call(t.process)?function(){s=function(t){e.nextTick(function(){a(t)})}}():function(){if(t.postMessage&&!t.importScripts){var e=!0,n=t.onmessage;return t.onmessage=function(){e=!1},t.postMessage("","*"),t.onmessage=n,e}}()?function(){var e="setImmediate$"+Math.random()+"$",n=function(n){n.source===t&&"string"==typeof n.data&&0===n.data.indexOf(e)&&a(+n.data.slice(e.length))};t.addEventListener?t.addEventListener("message",n,!1):t.attachEvent("onmessage",n),s=function(n){t.postMessage(e+n,"*")}}():t.MessageChannel?function(){var t=new MessageChannel;t.port1.onmessage=function(t){a(t.data)},s=function(e){t.port2.postMessage(e)}}():f&&"onreadystatechange"in f.createElement("script")?function(){var t=f.documentElement;s=function(e){var n=f.createElement("script");n.onreadystatechange=function(){a(e),n.onreadystatechange=null,t.removeChild(n),n=null},t.appendChild(n)}}():function(){s=function(t){setTimeout(a,0,t)}}(),d.setImmediate=o,d.clearImmediate=r}}("undefined"==typeof self?void 0===t?this:t:self)}).call(e,n(7),n(20))},function(t,e){function n(){throw new Error("setTimeout has not been defined")}function o(){throw new Error("clearTimeout has not been defined")}function r(t){if(u===setTimeout)return setTimeout(t,0);if((u===n||!u)&&setTimeout)return u=setTimeout,setTimeout(t,0);try{return u(t,0)}catch(e){try{return u.call(null,t,0)}catch(e){return u.call(this,t,0)}}}function i(t){if(f===clearTimeout)return clearTimeout(t);if((f===o||!f)&&clearTimeout)return f=clearTimeout,clearTimeout(t);try{return f(t)}catch(e){try{return f.call(null,t)}catch(e){return f.call(this,t)}}}function a(){b&&p&&(b=!1,p.length?m=p.concat(m):v=-1,m.length&&s())}function s(){if(!b){var t=r(a);b=!0;for(var e=m.length;e;){for(p=m,m=[];++v<e;)p&&p[v].run();v=-1,e=m.length}p=null,b=!1,i(t)}}function c(t,e){this.fun=t,this.array=e}function l(){}var u,f,d=t.exports={};!function(){try{u="function"==typeof setTimeout?setTimeout:n}catch(t){u=n}try{f="function"==typeof clearTimeout?clearTimeout:o}catch(t){f=o}}();var p,m=[],b=!1,v=-1;d.nextTick=function(t){var e=new Array(arguments.length-1);if(arguments.length>1)for(var n=1;n<arguments.length;n++)e[n-1]=arguments[n];m.push(new c(t,e)),1!==m.length||b||r(s)},c.prototype.run=function(){this.fun.apply(null,this.array)},d.title="browser",d.browser=!0,d.env={},d.argv=[],d.version="",d.versions={},d.on=l,d.addListener=l,d.once=l,d.off=l,d.removeListener=l,d.removeAllListeners=l,d.emit=l,d.prependListener=l,d.prependOnceListener=l,d.listeners=function(t){return[]},d.binding=function(t){throw new Error("process.binding is not supported")},d.cwd=function(){return"/"},d.chdir=function(t){throw new Error("process.chdir is not supported")},d.umask=function(){return 0}},function(t,e,n){"use strict";n(22).polyfill()},function(t,e,n){"use strict";function o(t,e){if(void 0===t||null===t)throw new TypeError("Cannot convert first argument to object");for(var n=Object(t),o=1;o<arguments.length;o++){var r=arguments[o];if(void 0!==r&&null!==r)for(var i=Object.keys(Object(r)),a=0,s=i.length;a<s;a++){var c=i[a],l=Object.getOwnPropertyDescriptor(r,c);void 0!==l&&l.enumerable&&(n[c]=r[c])}}return n}function r(){Object.assign||Object.defineProperty(Object,"assign",{enumerable:!1,configurable:!0,writable:!0,value:o})}t.exports={assign:o,polyfill:r}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(24),r=n(6),i=n(5),a=n(36),s=function(){for(var t=[],e=0;e<arguments.length;e++)t[e]=arguments[e];if("undefined"!=typeof window){var n=a.getOpts.apply(void 0,t);return new Promise(function(t,e){i.default.promise={resolve:t,reject:e},o.default(n),setTimeout(function(){r.openModal()})})}};s.close=r.onAction,s.getState=r.getState,s.setActionValue=i.setActionValue,s.stopLoading=r.stopLoading,s.setDefaults=a.setDefaults,e.default=s},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(0),i=r.default.MODAL,a=n(4),s=n(34),c=n(35),l=n(1);e.init=function(t){o.getNode(i)||(document.body||l.throwErr("You can only use SweetAlert AFTER the DOM has loaded!"),s.default(),a.default()),a.initModalContent(t),c.default(t)},e.default=e.init},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.MODAL;e.modalMarkup='\n  <div class="'+r+'" role="dialog" aria-modal="true"></div>',e.default=e.modalMarkup},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.OVERLAY,i='<div \n    class="'+r+'"\n    tabIndex="-1">\n  </div>';e.default=i},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.ICON;e.errorIconMarkup=function(){var t=r+"--error",e=t+"__line";return'\n    <div class="'+t+'__x-mark">\n      <span class="'+e+" "+e+'--left"></span>\n      <span class="'+e+" "+e+'--right"></span>\n    </div>\n  '},e.warningIconMarkup=function(){var t=r+"--warning";return'\n    <span class="'+t+'__body">\n      <span class="'+t+'__dot"></span>\n    </span>\n  '},e.successIconMarkup=function(){var t=r+"--success";return'\n    <span class="'+t+"__line "+t+'__line--long"></span>\n    <span class="'+t+"__line "+t+'__line--tip"></span>\n\n    <div class="'+t+'__ring"></div>\n    <div class="'+t+'__hide-corners"></div>\n  '}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.CONTENT;e.contentMarkup='\n  <div class="'+r+'">\n\n  </div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(0),r=o.default.BUTTON_CONTAINER,i=o.default.BUTTON,a=o.default.BUTTON_LOADER;e.buttonMarkup='\n  <div class="'+r+'">\n\n    <button\n      class="'+i+'"\n    ></button>\n\n    <div class="'+a+'">\n      <div></div>\n      <div></div>\n      <div></div>\n    </div>\n\n  </div>\n'},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(4),r=n(2),i=n(0),a=i.default.ICON,s=i.default.ICON_CUSTOM,c=["error","warning","success","info"],l={error:r.errorIconMarkup(),warning:r.warningIconMarkup(),success:r.successIconMarkup()},u=function(t,e){var n=a+"--"+t;e.classList.add(n);var o=l[t];o&&(e.innerHTML=o)},f=function(t,e){e.classList.add(s);var n=document.createElement("img");n.src=t,e.appendChild(n)},d=function(t){if(t){var e=o.injectElIntoModal(r.iconMarkup);c.includes(t)?u(t,e):f(t,e)}};e.default=d},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(2),r=n(4),i=function(t){navigator.userAgent.includes("AppleWebKit")&&(t.style.display="none",t.offsetHeight,t.style.display="")};e.initTitle=function(t){if(t){var e=r.injectElIntoModal(o.titleMarkup);e.textContent=t,i(e)}},e.initText=function(t){if(t){var e=document.createDocumentFragment();t.split("\n").forEach(function(t,n,o){e.appendChild(document.createTextNode(t)),n<o.length-1&&e.appendChild(document.createElement("br"))});var n=r.injectElIntoModal(o.textMarkup);n.appendChild(e),i(n)}}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(4),i=n(0),a=i.default.BUTTON,s=i.default.DANGER_BUTTON,c=n(3),l=n(2),u=n(6),f=n(5),d=function(t,e,n){var r=e.text,i=e.value,d=e.className,p=e.closeModal,m=o.stringToNode(l.buttonMarkup),b=m.querySelector("."+a),v=a+"--"+t;if(b.classList.add(v),d){(Array.isArray(d)?d:d.split(" ")).filter(function(t){return t.length>0}).forEach(function(t){b.classList.add(t)})}n&&t===c.CONFIRM_KEY&&b.classList.add(s),b.textContent=r;var g={};return g[t]=i,f.setActionValue(g),f.setActionOptionsFor(t,{closeModal:p}),b.addEventListener("click",function(){return u.onAction(t)}),m},p=function(t,e){var n=r.injectElIntoModal(l.footerMarkup);for(var o in t){var i=t[o],a=d(o,i,e);i.visible&&n.appendChild(a)}0===n.children.length&&n.remove()};e.default=p},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(3),r=n(4),i=n(2),a=n(5),s=n(6),c=n(0),l=c.default.CONTENT,u=function(t){t.addEventListener("input",function(t){var e=t.target,n=e.value;a.setActionValue(n)}),t.addEventListener("keyup",function(t){if("Enter"===t.key)return s.onAction(o.CONFIRM_KEY)}),setTimeout(function(){t.focus(),a.setActionValue("")},0)},f=function(t,e,n){var o=document.createElement(e),r=l+"__"+e;o.classList.add(r);for(var i in n){var a=n[i];o[i]=a}"input"===e&&u(o),t.appendChild(o)},d=function(t){if(t){var e=r.injectElIntoModal(i.contentMarkup),n=t.element,o=t.attributes;"string"==typeof n?f(e,n,o):e.appendChild(n)}};e.default=d},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(2),i=function(){var t=o.stringToNode(r.overlayMarkup);document.body.appendChild(t)};e.default=i},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(5),r=n(6),i=n(1),a=n(3),s=n(0),c=s.default.MODAL,l=s.default.BUTTON,u=s.default.OVERLAY,f=function(t){t.preventDefault(),v()},d=function(t){t.preventDefault(),g()},p=function(t){if(o.default.isOpen)switch(t.key){case"Escape":return r.onAction(a.CANCEL_KEY)}},m=function(t){if(o.default.isOpen)switch(t.key){case"Tab":return f(t)}},b=function(t){if(o.default.isOpen)return"Tab"===t.key&&t.shiftKey?d(t):void 0},v=function(){var t=i.getNode(l);t&&(t.tabIndex=0,t.focus())},g=function(){var t=i.getNode(c),e=t.querySelectorAll("."+l),n=e.length-1,o=e[n];o&&o.focus()},h=function(t){t[t.length-1].addEventListener("keydown",m)},w=function(t){t[0].addEventListener("keydown",b)},y=function(){var t=i.getNode(c),e=t.querySelectorAll("."+l);e.length&&(h(e),w(e))},x=function(t){if(i.getNode(u)===t.target)return r.onAction(a.CANCEL_KEY)},_=function(t){var e=i.getNode(u);e.removeEventListener("click",x),t&&e.addEventListener("click",x)},k=function(t){o.default.timer&&clearTimeout(o.default.timer),t&&(o.default.timer=window.setTimeout(function(){return r.onAction(a.CANCEL_KEY)},t))},O=function(t){t.closeOnEsc?document.addEventListener("keyup",p):document.removeEventListener("keyup",p),t.dangerMode?v():g(),y(),_(t.closeOnClickOutside),k(t.timer)};e.default=O},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r=n(3),i=n(37),a=n(38),s={title:null,text:null,icon:null,buttons:r.defaultButtonList,content:null,className:null,closeOnClickOutside:!0,closeOnEsc:!0,dangerMode:!1,timer:null},c=Object.assign({},s);e.setDefaults=function(t){c=Object.assign({},s,t)};var l=function(t){var e=t&&t.button,n=t&&t.buttons;return void 0!==e&&void 0!==n&&o.throwErr("Cannot set both 'button' and 'buttons' options!"),void 0!==e?{confirm:e}:n},u=function(t){return o.ordinalSuffixOf(t+1)},f=function(t,e){o.throwErr(u(e)+" argument ('"+t+"') is invalid")},d=function(t,e){var n=t+1,r=e[n];o.isPlainObject(r)||void 0===r||o.throwErr("Expected "+u(n)+" argument ('"+r+"') to be a plain object")},p=function(t,e){var n=t+1,r=e[n];void 0!==r&&o.throwErr("Unexpected "+u(n)+" argument ("+r+")")},m=function(t,e,n,r){var i=typeof e,a="string"===i,s=e instanceof Element;if(a){if(0===n)return{text:e};if(1===n)return{text:e,title:r[0]};if(2===n)return d(n,r),{icon:e};f(e,n)}else{if(s&&0===n)return d(n,r),{content:e};if(o.isPlainObject(e))return p(n,r),e;f(e,n)}};e.getOpts=function(){for(var t=[],e=0;e<arguments.length;e++)t[e]=arguments[e];var n={};t.forEach(function(e,o){var r=m(0,e,o,t);Object.assign(n,r)});var o=l(n);n.buttons=r.getButtonListOpts(o),delete n.button,n.content=i.getContentOpts(n.content);var u=Object.assign({},s,c,n);return Object.keys(u).forEach(function(t){a.DEPRECATED_OPTS[t]&&a.logDeprecation(t)}),u}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var o=n(1),r={element:"input",attributes:{placeholder:""}};e.getContentOpts=function(t){var e={};return o.isPlainObject(t)?Object.assign(e,t):t instanceof Element?{element:t}:"input"===t?r:null}},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0}),e.logDeprecation=function(t){var n=e.DEPRECATED_OPTS[t],o=n.onlyRename,r=n.replacement,i=n.subOption,a=n.link,s=o?"renamed":"deprecated",c='SweetAlert warning: "'+t+'" option has been '+s+".";if(r){c+=" Please use"+(i?' "'+i+'" in ':" ")+'"'+r+'" instead.'}var l="https://sweetalert.js.org";c+=a?" More details: "+l+a:" More details: "+l+"/guides/#upgrading-from-1x",console.warn(c)},e.DEPRECATED_OPTS={type:{replacement:"icon",link:"/docs/#icon"},imageUrl:{replacement:"icon",link:"/docs/#icon"},customClass:{replacement:"className",onlyRename:!0,link:"/docs/#classname"},imageSize:{},showCancelButton:{replacement:"buttons",link:"/docs/#buttons"},showConfirmButton:{replacement:"button",link:"/docs/#button"},confirmButtonText:{replacement:"button",link:"/docs/#button"},confirmButtonColor:{},cancelButtonText:{replacement:"buttons",link:"/docs/#buttons"},closeOnConfirm:{replacement:"button",subOption:"closeModal",link:"/docs/#button"},closeOnCancel:{replacement:"buttons",subOption:"closeModal",link:"/docs/#buttons"},showLoaderOnConfirm:{replacement:"buttons"},animation:{},inputType:{replacement:"content",link:"/docs/#content"},inputValue:{replacement:"content",link:"/docs/#content"},inputPlaceholder:{replacement:"content",link:"/docs/#content"},html:{replacement:"content",link:"/docs/#content"},allowEscapeKey:{replacement:"closeOnEsc",onlyRename:!0,link:"/docs/#closeonesc"},allowClickOutside:{replacement:"closeOnClickOutside",onlyRename:!0,link:"/docs/#closeonclickoutside"}}}])});
 },{}]},{},[3]);
