@@ -974,7 +974,7 @@ ImageAnnotator.prototype.render = function (config) {
   // active the carousel
   const eles = $('.carousel.carousel-slider');
   console.log('Carousel Eles: ');
-  console.log(eles[0].childNodes);
+  //console.log(eles[0].childNodes);
   $('.carousel-item').first().addClass('active').show();
 
 
@@ -1108,6 +1108,8 @@ ImageAnnotator.prototype.render = function (config) {
 
   // open the loading modal
   this.modals.loading_modal.modal('open');
+
+  $(".locked-overlay").remove();
 };
 
 /**
@@ -4027,15 +4029,6 @@ CrowdCurioClient.prototype.getNextTask = function(queue_type, callback){
 // delete is supported for all models
 CrowdCurioClient.prototype.create = function(model, params, callback){
     var that = this;
-
-    // handle annotations made outside of a task session
-    var tsInstance = null;
-    if(that.task_session){
-        if(that.task_session.task_session){
-            tsInstance = {id: that.task_session.task_session, type: 'TaskSession'};
-        }
-    }
-
     // extend params by adding relations
     if(model === 'response'){
         params = jQuery.extend({
@@ -4058,7 +4051,7 @@ CrowdCurioClient.prototype.create = function(model, params, callback){
             task: that.task,
             experiment: that.experiment,
             condition: that.condition,
-            task_session: tsInstance,
+            task_session: {id: that.task_session.task_session, type: 'TaskSession'},
             updated_by: that.user
         }, params);
     }
@@ -4335,9 +4328,6 @@ TaskSession.prototype.init = function(params) {
         that.handleInterfaceActionTaskQueueSwitch = function(event){
             print("ERROR: Can't handle transmitted Inteface TaskQueueSwitch event. (E: "+event+" )");
         }
-        that.handleInterfaceActionUserJoin = function(event){
-            print("ERROR: Can't handle transmitted Inteface User Join event. (E: "+event+" )");
-        }
 
         // fetch the task policy
         that.fetchPolicy().then(function(policy){
@@ -4395,9 +4385,6 @@ TaskSession.prototype.setListeners = function(obj){
     }
     if('taskQueueSwitch' in obj && typeof obj['taskQueueSwitch'] === "function"){
         this.handleInterfaceActionTaskQueueSwitch = obj['taskQueueSwitch'];
-    }
-    if('onUserJoin' in obj && typeof obj['onUserJoin'] === "function"){
-        this.handleInterfaceActionUserJoin = obj['onUserJoin'];
     }
 };
 
@@ -4498,11 +4485,7 @@ TaskSession.prototype.fetchPolicy = function(){
  * Connects and maintains a valid websocket connection for a particula task session
  */
 TaskSession.prototype.connect = function(roomId){
-    var parent_ele = $('.chat-container');
-    if(parent_ele.length === 0){
-        parent_ele = $("#task-container");
-    }
-    parent_ele.append('<div id="chats" class="chats-div"></div>');
+    $("#task-container").append('<div id="chats"></div>');
 
     var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
     var ws_path = ws_scheme + '://' + window.location.host + "/collaboration/stream/";
@@ -4787,7 +4770,6 @@ TaskSession.prototype.connect = function(roomId){
                 case 6: // Server is updating us with active users in session
                     that.userList = data;
                     updateUserList();
-                    that.handleInterfaceActionUserJoin(data);
                     return;
                 case 9:
                     that.handleInterfaceActionSave(data);
