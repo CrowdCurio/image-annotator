@@ -360,8 +360,10 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     $('#map').fadeOut();
 
     // 2.5. calculate accuracy
-    const performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
-
+    let performance = null;
+    if (that.mode === 'transcription') {
+      performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
+    }
     const content = {
       confidence: confidenceFormVal,
       performance,
@@ -811,7 +813,7 @@ ImageAnnotator.prototype.render = function (config) {
   let modalsTemplate = '<div id="loading_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#loading_modal" style="height: 110px;"><h5>Loading Task Interface</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="experiment_complete_modal" class="modal" style="top: auto; width: 310px !important;"><div class="modal-content modal-trigger" href="#experiment_complete_modal" style="height: 110px;"><center><h5>Leaving Task</h5></center><div class="progress"><div class="indeterminate"></div></div></div></div><div id="fetching_task_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#fetching_task_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Getting Next Task</h5><div class="progress"><div class="indeterminate"></div></div></div></div><div id="finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div><img src=\"https://media.giphy.com/media/j5QcmXoFWl4Q0/giphy.gif\"/></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'>You\'ve seen all of the images for this task. <p>Redirecting you to the homepage ... </p></div></div></div><div id="practice_finished_modal" class="modal" style="top: auto; width: 310px;"><div class="modal-content modal-trigger" href="#practice_finished_modal" style="height: 110px;text-align: center;"><h4 id="fetching-task-modal-text">You\'re Done!</h4><hr/><div>You\'ve completed all available practice tasks.</div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p>Exiting the Practice Room</p></div></div></div><div id="practice_information_modal" class="modal" style="top: auto; width: 510px;height: 565px;"><div class="modal-content" href="#practice_information_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">What is the Practice Room?</h5><hr/><div class="practice-information-body">The Practice Room is a task mode that lets you practice tasks without being penalized. The mode facilitates three objectives: <center><img src="https://www.burkert.com/var/buerkert/storage/images/media/images/speech-bubbles/3211190-1-eng-INT/speech-bubbles.jpg" style="width: 300px;"></center><ul><li><b>Practice tasks tell you what you did correctly.</b> You can try the task and compare your answers to what\'s correct.</li><hr style="width: 100px;"/><li><b>Practice tasks don\'t count against you:</b> However, practice tasks don\'t count toward the tasks required to complete the HIT.</li><hr style="width: 100px;"/><li><b>You can practice at your own leisure:</b> You can switch to the Practice Room at any point during the task. If you switch modes in the middle of a task, your annotations won\'t be erased.</li></ul></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="practice-information-button" class="modal-action modal-close btn">Got it!</a></p></div></div></div><div id="survey_efficacy_modal" class="modal" style="top: auto; width: 710px;height: 365px;"><div class="modal-content" href="#survey_efficacy_modal" style="height: 110px;text-align: center;"><h5 id="fetching-task-modal-text">Rate Yourself!</h5><hr/><div class="self-efficacy-survey-body"><center><p style="width: 500px;">On a scale of 1 to 10, how confident are you that you can perfectly identify all Greek Taus in the next image?</p></center><input id="self-efficacy-slider" type="range" min="1" max="10" step="1" value="5"/><center><p style="font-size: 0.7em; margin: 0;">Note: Your answer will not affect your payment.</p></center></div><hr/><div class=\'row\' style=\'margin-bottom: 0px;\'><p><a id="efficacy-submit-button" class="modal-action modal-close btn">Submit</a></p></div></div></div>';
 
   // add CSS to the header
-  const header = $("head");
+  const header = $('head');
   header.append('<link rel="stylesheet" type="text/css" href="https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/tutorial/hopscotch.css"/>');
 
   if ('collaboration' in config) {
@@ -974,7 +976,7 @@ ImageAnnotator.prototype.render = function (config) {
   // active the carousel
   const eles = $('.carousel.carousel-slider');
   console.log('Carousel Eles: ');
-  //console.log(eles[0].childNodes);
+  // console.log(eles[0].childNodes);
   $('.carousel-item').first().addClass('active').show();
 
 
@@ -1035,7 +1037,7 @@ ImageAnnotator.prototype.render = function (config) {
       if (config.sampling) {
         that.modals.survey_efficacy_modal.modal('open');
       }
-      let tour = {
+      const tour = {
         id: 'hello-hopscotch',
         steps: [
           {
@@ -1109,7 +1111,7 @@ ImageAnnotator.prototype.render = function (config) {
   // open the loading modal
   this.modals.loading_modal.modal('open');
 
-  $(".locked-overlay").remove();
+  $('.locked-overlay').remove();
 };
 
 /**
@@ -3571,13 +3573,13 @@ ImageAnnotator.prototype.handleInterfaceTaskQueueSwitch = function (event) {
 
 /**
  * Handles events for user presence updates.
- * @param {Object} event 
+ * @param {Object} event
  */
 ImageAnnotator.prototype.handleInterfaceUserJoin = function (event) {
   // redistribute the data object
-  if(ms.data.id === undefined){
+  if (ms.data.id === undefined) {
     // We need to wait to send.
-    setTimeout(function(){
+    setTimeout(() => {
       ms.handleInterfaceUserJoin(event);
     }, 1000);
   } else {
