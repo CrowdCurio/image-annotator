@@ -202,10 +202,21 @@
 .ext3 {left: 77px; top: -322px;}
 .ext4 {left: 172px; top: -275px;width:75px !important;}
 
-#bottom-controls {
+/*#bottom-controls {
     display: inline-block;
     width: 905px;
     height: 221px;
+}*/
+
+#bottom-controls {
+    display: inline-block;
+    width: 250px;
+    height: 653px;
+    border-width: 1px;
+    border-style: groove;
+    position:relative;
+    top:-25px;
+    left: 20px;
 }
 
 #bottom-control-back-div, #bottom-control-next-div {
@@ -240,8 +251,9 @@
     cursor: pointer;
 }
 
+/*jarvis*/
 .view-divider {
-    display: inline-block;
+    /*display: inline-block;
     float: left;
     border-left: 1px solid black;
     border-right: 1px solid black;
@@ -249,9 +261,10 @@
     height: 10px;
     width: 905px;
     background-color: #666;
-    margin-top: -4px;
+    margin-top: -4px;*/
 }
 
+/*jarvis*/
 #keypad, #countingpad {
    -webkit-box-shadow: rgba(0, 0, 0, 0.496094) 0px 2px 4px;
    -moz-box-shadow: rgba(0, 0, 0, 0.496094) 0px 2px 4px;
@@ -259,12 +272,12 @@
    background:#343A43;
     border-left: 1px solid black;
     border-right: 1px solid black;
-   position: relative;
    padding: 10px 17px;
-   height: 100%;
+   position: fixed;
+   left:600px;
 }
 
-#keypad .main, #countingpad .main{
+#keypad .main, #countingpad .main{ 
   background: #232323;
   padding:10px;
   -webkit-border-radius: 5px;
@@ -275,14 +288,16 @@
   box-shadow: inset 0 0 8px #000;
   color:#dfdfdf;
   padding: 16px 16px 0px;
-  position: relative;
-  height: 100%;
-  min-width: 800px;
+  position: absolute;
+  height: 600px;
+  width: 100px;
+  left:800px;
+  bottom:600px;
 }
 
 #primary_countingboard.fullscreen {
   width: -moz-fit-content;
-  min-width: 850px;
+  min-width: 850px; 
 }
 
 /* Standard Rows */
@@ -665,8 +680,8 @@ a.introjs-skipbutton.introjs-donebutton {display: block !important;}
 }
 
 #viewer {
-  width: 905px;
-  height: 500px;
+  width: 920px;
+  height: 730px;
   overflow: hidden;
   min-width: 855px;
   position: relative;
@@ -801,9 +816,23 @@ min-height: 70px;
 
 #zoom_view_toggles.fullscreen {
   position: absolute;
-  z-index: 9;
+  z-index: 100;
+  top:285px;
   min-height: auto;
   margin-left: 10px;
+}
+
+#submission_toggles{
+  width: 250px;
+}
+
+#submission_toggles.fullscreen{
+      z-index:20;
+      position:fixed;
+      right:0px; 
+      top: 48px;
+      width: 176px; 
+      min-height: 100px;
 }
 
 #practice_toggles_inner, #practice_submission_toggles_inner, #submission_toggles_inner, #practice_validation_toggles_inner{
@@ -855,18 +884,20 @@ min-height: 70px;
   height: 97vh;
 }
 
-.view-divider.fullscreen, #viewer.fullscreen, #bottom-controls.fullscreen, #bottom-control-keypad.fullscreen {
+.view-divider.fullscreen, #viewer.fullscreen{
   width: 100%;
+  border-width :0px; 
+  z-index: 0;
 }
+
+
 
 #bottom-controls.fullscreen {
   bottom: 1;
-  position: absolute;
-  left: 0;
+  position: fixed;
+  left:100%;
   border-top: 3px solid rgb(36, 36, 36);
-  width: 900px;
-  left: 25%;
-  min-width: auto;
+  width: 176px;
 }
 
 
@@ -879,9 +910,9 @@ min-height: 70px;
   height: 100%;
 }
 
-#bottom-control-keypad {
+/*#bottom-control-keypad {
   width: 905px;
-}
+}*/
 
 #next-button, #next-practice-button {
   width: 100%;
@@ -916,7 +947,11 @@ min-height: 70px;
   margin: 0 auto;
   border: 3px solid rgba(255, 165, 0, 0.7);
   min-height: -webkit-fill-available;
-  width: fit-content;
+  /*width: fit-content;*/
+
+  /*jarvis*/
+  height: 850px;
+  width: 1000px;
 }
 
 .side_buttons {
@@ -949,12 +984,12 @@ a.introjs-skipbutton.introjs-donebutton {display: block !important;}
   height: 100%;
   max-width: 1300px;
 }
-
+/*
 #viewer {
   width: 905px;
   height: 500px;
   box-shadow: rgb(0, 0, 0) 0px 0px 2px 0px;
-}
+}*/
 
 .key {
   width: 70px;
@@ -1012,7 +1047,7 @@ min-height: 70px;
   background-color: #0F81BF !important;
 }
 
-.toggle-button {
+/*.toggle-button {
   width: 50px !important;
   height: 50px !important;
   background: #575E68 !important;
@@ -1030,7 +1065,7 @@ min-height: 70px;
   -o-transition: background-color 2s ease-out;
   transition: background-color 2s ease-out;
   cursor: pointer;
-}
+}*/
 
 #zoom_in, #zoom_out, #fullscreen, #toggle-mini-map {
   position: relative;
@@ -1060,7 +1095,7 @@ min-height: 70px;
 }
 
 .empty-space {
-  height: 40px;
+  height: 5px;
 }
 
 #main-interface {
@@ -1076,13 +1111,6 @@ min-height: 70px;
   left: 0;
   width: 100%;
   height: 100%;
-}
-
-#zoom_view_toggles.fullscreen {
-  position: absolute;
-  z-index: 9;
-  min-height: auto;
-  margin-left: 10px;
 }
 
 #practice_toggles.fullscreen {
@@ -1115,20 +1143,37 @@ min-height: 70px;
   height: 97vh;
 }
 
-.view-divider.fullscreen, #viewer.fullscreen, #bottom-controls.fullscreen, #bottom-control-keypad.fullscreen {
+.view-divider.fullscreen, #viewer.fullscreen  {
   width: 100%;
 }
 
-#bottom-controls.fullscreen {
-  bottom: 0px;
-  position: absolute;
-  left: auto;
-  border-top: 3px solid rgb(36, 36, 36);
-  width: 900px;
-  right: 360px;
-  min-width: auto;
-  z-index: 8;
-}
+
+ #bottom-control-keypad.fullscreen{
+   z-index:20;
+   background-color: #EAEAEA;
+   width: 176px;
+   position:fixed;
+   right:1px;
+   top:162px;
+   height:658px;
+   border-style: solid;
+   border-width: 1px;
+   border-color: black;
+ }
+
+ #bud-btn.fullscreen{
+   width:165px;
+ }
+
+  #flower-btn.fullscreen{
+   /*jarvis*/
+   width:165px;
+ }
+
+  #fruit-btn.fullscreen{
+   /*jarvis*/
+   width:165px;
+ }
 
 #task-row-container.fullscreen {
   margin-bottom: 0;
@@ -1136,10 +1181,6 @@ min-height: 70px;
 
 #viewer.fullscreen {
   height: 100%;
-}
-
-#bottom-control-keypad {
-  width: 905px;
 }
 
 #next-button, #next-practice-button {
@@ -1175,7 +1216,9 @@ min-height: 70px;
 }
 
 #map.fullscreen {
-  right: 270px;
+  position: fixed;
+  right: 177px;
+  top:27px;
 }
 
 .location {
@@ -1221,6 +1264,7 @@ min-height: 70px;
   border: solid 1px #CCC;
   cursor: pointer;
 }
+
 
 .toggle-btn.error {
   box-shadow: 0 0 5px rgb(255, 0, 0);
@@ -1381,27 +1425,32 @@ min-height: 70px;
 }
 
 #task-options {
-  width: 200px;
+  width: 200px; 
   text-align: center;
   float: left;
   margin-left: 15px;
 }
 
 #task-options-header {
+  margin-top: 8px;
+  height: 20px;
   color: black;
   font-family: 'Raleway', sans-serif;
 }
 
 .task-option-toggle {
-  width: 85%;
+  width: 180px;
+  height: 32px;
   text-align: left;
-  font-size: 10pt;
+  font-size: 11pt;
+  vertical-align: middle;
 }
 
 .task-option-count {
   display: inline-block;
-  font-size: 10pt;
+  font-size: 11pt;
   float: right;
+  vertical-align: middle;
 }
 
 .example-img {
@@ -1534,27 +1583,37 @@ span.thumb {
   color: white;
   background: #232323;
   position: fixed;
-  left: 36%;
+  right: 36%;
   border-radius: 5px;
   border: 3px solid rgba(255, 165, 0, 0.7);
   top: 5px;
 }
 
 #task-counter.fullscreen{
-  position: absolute;
-  right: 550px;
-  left: auto;
-  top: 20px;
+  position: fixed;
+  right: 0px;
+  top: 27px;
+  height:45px;
+  width:176px;
 }
 
 #task-counter-task-number{
+  position:relative;
+  top:2px;
+  right:-9px;
   margin-top: 5px;
   font-size: 18pt;
   margin-left: 75px;
-  margin-top: 5px;
   font-family: 'Raleway', sans-serif;
 }
 
+#task-counter-task-number.fullscreen{
+  position:relative;
+  right:15px;
+  top:-4px;
+  font-size: 18pt;
+  font-family: 'Raleway', sans-serif;
+}
 
 .locked-overlay {
   position: absolute;
@@ -1664,14 +1723,29 @@ textarea#confidenceTextArea::placeholder {
   z-index: 9;
   height: 100%;
   width: 250px;
-  right: 15px;
+  position: relative;
+  top: -25px;
+  left: 20px;
 }
 
 #right-action-panel.fullscreen {
-  float: auto;
-  position: absolute;
+  position: fixed;
+  left:100%;
+  height:800px;
+  width:176px;
 }
 
-button:focus {
+/*button:focus {
   background-color: #efefef !important;
+}*/
+
+.example-container{
+  position: relative;
+  left:45px;
+  bottom: 50px;
+}
+
+.example-container.fullscreen{
+  z-index:10;
+  left:7.5px;
 }
