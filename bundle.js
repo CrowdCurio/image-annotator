@@ -6934,7 +6934,7 @@ const config = window.config || {
 
 // set whether dejavu is implemented and whether the duplicated images can be side by side
 // Note: if there are only 1 image in the queue, that image will be duplicated and sideBySideAllowed always behaves as it is true.
-global.dejavu = false;
+global.dejavu = true;
 global.sideBySideAllowed = false
 
 //store the indexes of the duplicate images in the queue. dupIndex1 < dupIndex2
