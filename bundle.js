@@ -2875,12 +2875,6 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     /* attach handlers for most of the UI components */
     this.attachHandlers();
 
-    // check for completed tasks
-    const tasksCompleted = window.localStorage.getItem(`crowdcurio-tau-${window.experiment}-completed-tasks`);
-    if (tasksCompleted) {
-        that.completedTasks = tasksCompleted;
-    }
-
     // update the task counter
     const task_counter = $('#task-counter-task-number');
     const completed = parseInt(that.completedTasks) + 1;
@@ -2900,9 +2894,6 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     } else {
         this.currentQueue = config.default_queue;
     }
-
-    console.log(config.default_queue);
-    console.log(`TaskQueue: ${this.currentQueue}`);
 
     // use the task queue
     /* get the first item in the queue and it's class label */
@@ -3087,6 +3078,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                 setTimeout(() => {
                 // otherwise, increment the user's experiment workflow
                 // alert("This should transition the user.");
+                that.completedTasks = 0; 
                 console.log("next stage");
                 incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
                 }, 1000);
@@ -3437,7 +3429,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             // update the task counter
             const task_counter = $('#task-counter-task-number');
             const completed = parseInt(that.completedTasks) + 1;
-            if ($('#main-interface').hasClass('fullscreen')){//jarvis
+            if ($('#main-interface').hasClass('fullscreen')){
               task_counter.text(`${completed} / 2`);
             }else{
               task_counter.text(`Task Progress: ${completed} / 2`);
@@ -4537,16 +4529,35 @@ ImageAnnotator.prototype.addTool = function (event) {
 
       // create the annotation
       if(!window.assessment){
-            this.client.create('annotation', {
-            label: surface.markers[surface.selection].label,
-            position: {
-              x: surface.markers[surface.selection].x,
-              y: surface.markers[surface.selection].y,
-            },
-          }, (annotation) => {
-            // set the id of the annotation html element
-            $(`#m-${surface.selection}`).attr('annotation-id', annotation.id);
-          });
+            console.log("debug: ");//fixit
+            console.log(this.completedTasks);
+            console.log(dupIndex1);
+            console.log(dupIndex2);
+            if(dejavu && this.completedTasks==dupIndex2){//for Dejavu, record the duplicated two images
+              this.client.create('annotation', {
+                label: surface.markers[surface.selection].label,
+                position: {
+                  x: surface.markers[surface.selection].x,
+                  y: surface.markers[surface.selection].y,
+                },
+                  isDup: true,
+              }, (annotation) => {
+                // set the id of the annotation html element
+                $(`#m-${surface.selection}`).attr('annotation-id', annotation.id);
+              });
+            }else{
+              this.client.create('annotation', {
+                label: surface.markers[surface.selection].label,
+                position: {
+                  x: surface.markers[surface.selection].x,
+                  y: surface.markers[surface.selection].y,
+                },
+              }, (annotation) => {
+                // set the id of the annotation html element
+                $(`#m-${surface.selection}`).attr('annotation-id', annotation.id);
+              });
+            }
+
       }else{
         //do nothing
       }
@@ -5878,7 +5889,7 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     task_counter.removeClass('fullscreen');
     rightActionPanel.removeClass('fullscreen');
     task_counter_num.text("Task Progress: "+task_counter_num[0].innerText);
-    bbtn.removeClass('fullscreen');//jarvis
+    bbtn.removeClass('fullscreen');
     fbtn.removeClass('fullscreen');
     frbtn.removeClass('fullscreen');
     example_container.removeClass('fullscreen');
@@ -5911,7 +5922,7 @@ ImageAnnotator.prototype.toggleFullscreen = function (e) {
     chat_window.addClass('fullscreen');
     task_counter.addClass('fullscreen');
     rightActionPanel.addClass('fullscreen');
-    bbtn.addClass('fullscreen');//jarvis
+    bbtn.addClass('fullscreen');
     fbtn.addClass('fullscreen');
     frbtn.addClass('fullscreen');
     example_container.addClass('fullscreen');
@@ -7082,8 +7093,6 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
                     'condition': params['condition']
                  });
             }
-            
-
         } else {
             that.experiment = null;
             if(dejavu){
@@ -8310,7 +8319,6 @@ TaskRoutingManager.prototype.init = function(client, params) {
         }
 
     */
-    
     this.client = client;
     this.queues = {};
     this.params = params;
@@ -8323,9 +8331,9 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
     params['type'] = queue_type;
     
     var that = this;
+
     let action = ["route", "list"]
     return this.client.action(schema, action, params).then(function(response){
-        
         // store the total number of tasks remaining
         that.queues[params['type']]['total'] = response.count;
 
@@ -8368,8 +8376,9 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
             that.queues[params['type']]['total'] = response.count;
             console.log("Dejavu is implemented.");
             var dup_index = getRandomInt( that.queues[params['type']]['queue'].length );
-            var dupImg = bestCopyEver(that.queues[params['type']]['queue'][dup_index]); 
-            that.queues[params['type']]['queue'].push( dupImg );
+            var dupImg = bestCopyEver(that.queues[params['type']]['queue'][dup_index]);
+            dupImg.slug = dupImg.slug + "-copy"
+            that.queues[params['type']]['queue'].push(dupImg);
             
             dupIndex1 = dup_index;
             dupIndex2 = that.queues[params['type']]['queue'].length-1;
@@ -8434,6 +8443,7 @@ TaskRoutingManager.prototype.simulateGetNextTask = function(){
 };
 
 module.exports = TaskRoutingManager;
+
 },{}],12:[function(require,module,exports){
 var ReconnectingWebSocket = require('reconnectingwebsocket');
 var md = require("node-markdown").Markdown;
