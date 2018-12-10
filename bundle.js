@@ -4529,7 +4529,6 @@ ImageAnnotator.prototype.addTool = function (event) {
 
       // create the annotation
       if(!window.assessment){
-            console.log("debug: ");//fixit
             console.log(this.completedTasks);
             console.log(dupIndex1);
             console.log(dupIndex2);
