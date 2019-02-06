@@ -3029,11 +3029,11 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     that.onNextTask = function () {
         // 1. validation
         const i = $('.marker').length;
-        //if (i === 0) { alert('Error: You cannot submit without making annotations!');   console.log("timer:"); that.timer.stop(); console.log(that.timer.getTime()/1000); return; }//fixit
+        //if (i === 0) { alert('Error: You cannot submit without making annotations!');   console.log("timer:"); that.timer.stop(); console.log(that.timer.getTime()/1000); return; }//old implementation
 
         var loadNextImage = false;
 
-        that.timer.stop();//fixit
+        that.timer.stop();
         if(that.timer.getTime()<60000){
             swal({
               confirmButtonColor: '#39ce63',
@@ -3053,7 +3053,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             swal({
               confirmButtonColor: '#39ce63',
               title: 'You have not marked any organs. \n\nDo you want to go back and check the example images?\n\n',
-              text: "You can click the buttons on the right of the interface to see the example images of each organ.",
+              text: "You can click the buttons on the right side of the interface to see the example images of each organ.",
               type: 'warning',
               showCancelButton: true,
               cancelButtonColor: '#d33',
@@ -3110,7 +3110,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                         
                         console.log('Result after save:');
                         console.log(result);
-                        console.log(result.id)//fixit
+                        console.log(result.id)
 
                         // reset the surface
                         ms.resetSurface();
@@ -3246,7 +3246,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                 
                 console.log('Result after save:');
                 console.log(result);
-                console.log(result.id)//fixit
+                console.log(result.id)
 
                 // reset the surface
                 ms.resetSurface();
@@ -7635,8 +7635,6 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
 
 CrowdCurioClient.prototype.setData = function(id){
     this.data = {id: id, type: 'Data'};
-    console.log("debug data is set: "+id);//fixit
-    console.log(this.data)
 }
 
 
