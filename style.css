@@ -40,14 +40,12 @@
 
 .marker {
   background: #127274;
-	height: 20px;
-	width: 20px;
 	position: absolute;
 	opacity: 0.3;
 	cursor:pointer;
   -webkit-border-radius: 15px;
   -moz-border-radius:15px;
-  border-radius:15px;
+  border-radius: 100%;
 }
 /*.marker:hover{opacity:0.4;}*/
 #markers .solid {
@@ -262,6 +260,7 @@
     width: 905px;
     background-color: #666;
     margin-top: -4px;*/
+    height: 7px;
 }
 
 /*jarvis*/
@@ -888,6 +887,7 @@ min-height: 70px;
   width: 100%;
   border-width :0px; 
   z-index: 0;
+  height: 0px;
 }
 
 
@@ -930,11 +930,11 @@ min-height: 70px;
 
 .marker {
   position: absolute;
-  height: 20px;
-  width: 20px;
+  height: 100px;
+  width: 100px;
   box-shadow: rgba(0,0,0,.496094) 0 2px 4px;
   -webkit-border-radius: 15px;
-  border-radius: 15px;
+  border-radius: 100%;
 }
 
 .marker .character {
@@ -1143,7 +1143,7 @@ min-height: 70px;
   height: 97vh;
 }
 
-.view-divider.fullscreen, #viewer.fullscreen  {
+.view-divider.fullscreen {
   width: 100%;
 }
 
@@ -1181,6 +1181,7 @@ min-height: 70px;
 
 #viewer.fullscreen {
   height: 100%;
+  width: 100%;
 }
 
 #next-button, #next-practice-button {
@@ -1367,10 +1368,17 @@ min-height: 70px;
   background: radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.25) 60%, green 10%);
 }
 
+/*.marker-n1.hovering { old version which enlarges the ma
+  rkers while they are being hovered on */
+/*  background: -webkit-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;*/
+/*  background: -moz-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;*/
+/*  background: radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;*/
+/*}*/
+
 .marker-n1.hovering {
-  background: -webkit-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;
-  background: -moz-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;
-  background: radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.0) 60%, green 10%) !important;
+    background: -webkit-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.25) 60%, yellow 10%);
+    background: -moz-radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.25) 60%, green 10%);
+    background: radial-gradient(50% 50%, circle, rgba(0, 255, 0, 0.25) 60%, green 10%);
 }
 
 .task-option-toggle.success:nth-of-type(2) {
@@ -1385,9 +1393,26 @@ min-height: 70px;
 }
 
 .marker-n2.hovering {
-  background: -webkit-radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.0) 60%, blue 10%) !important;
-  background: -moz-radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.0) 60%, blue 10%) !important;
-  background: radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.0) 60%, blue 10%) !important;
+    background: -webkit-radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.25) 60%, yellow 10%);
+    background: -moz-radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.25) 60%, blue 10%);
+    background: radial-gradient(50% 50%, circle, rgba(0, 0, 255, 0.25) 60%, blue 10%);
+}
+
+.task-option-toggle.success:nth-of-type(3) {
+    background: lightpink;
+    border: solid 1px #ff00ea !important;
+}
+
+.marker-n3 {
+    background: -webkit-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
+    background: -moz-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
+    background: radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
+}
+
+.marker-n3.hovering {
+    background: -webkit-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, yellow 10%);
+    background: -moz-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
+    background: radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
 }
 
 .task-option-toggle.success:nth-of-type(4) {
@@ -1407,22 +1432,7 @@ min-height: 70px;
   background: radial-gradient(50% 50%, circle, rgba(255, 0, 0, 0.0) 60%, red 10%) !important;
 }
 
-.task-option-toggle.success:nth-of-type(3) {
-  background: lightpink;
-  border: solid 1px #ff00ea !important;
-}
 
-.marker-n3 {
-  background: -webkit-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
-  background: -moz-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
-  background: radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.25) 60%, #ff00ea 10%);
-}
-
-.marker-n3.hovering {
-  background: -webkit-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.0) 60%, #ff00ea 10%) !important;
-  background: -moz-radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.0) 60%, #ff00ea 10%) !important;
-  background: radial-gradient(50% 50%, circle, rgba(255, 0, 234, 0.0) 60%, #ff00ea 10%) !important;
-}
 
 #task-options {
   width: 200px; 
