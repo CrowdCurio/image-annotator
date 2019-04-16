@@ -276,7 +276,7 @@
    left:600px;
 }
 
-#keypad .main, #countingpad .main{ 
+#keypad .main, #countingpad .main{
   background: #232323;
   padding:10px;
   -webkit-border-radius: 5px;
@@ -296,7 +296,7 @@
 
 #primary_countingboard.fullscreen {
   width: -moz-fit-content;
-  min-width: 850px; 
+  min-width: 850px;
 }
 
 /* Standard Rows */
@@ -804,6 +804,12 @@ min-height: 70px;
   width: 915px;
 }
 
+/*#mainSubject{*/
+/*    height: 50%;*/
+/*    width: 50%;*/
+/*    #left: 350px;*/
+/*    position: relative;*/
+/*}*/
 
 #main-interface.fullscreen {
   position: absolute;
@@ -828,9 +834,9 @@ min-height: 70px;
 #submission_toggles.fullscreen{
       z-index:20;
       position:fixed;
-      right:0px; 
+      right:0px;
       top: 48px;
-      width: 176px; 
+      width: 176px;
       min-height: 100px;
 }
 
@@ -885,7 +891,7 @@ min-height: 70px;
 
 .view-divider.fullscreen, #viewer.fullscreen{
   width: 100%;
-  border-width :0px; 
+  border-width :0px;
   z-index: 0;
   height: 0px;
 }
@@ -974,6 +980,10 @@ min-height: 70px;
 
 #next-button:hover, #next-practice-button:hover {
   background-color: #48bb01 !important;
+}
+
+#exit-button:hover{
+  background-color: #ff3333 !important;
 }
 
 a.introjs-skipbutton {display: none !important;}
@@ -1246,7 +1256,7 @@ min-height: 70px;
 #finished_modal {
   width: 410px !important;
   height: 100%;
-  max-height: 420px;
+  max-height: 465px;
 }
 
 .toggle-btn-grp {
@@ -1435,7 +1445,7 @@ min-height: 70px;
 
 
 #task-options {
-  width: 200px; 
+  width: 200px;
   text-align: center;
   float: left;
   margin-left: 15px;
