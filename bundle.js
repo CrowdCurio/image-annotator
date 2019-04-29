@@ -2767,6 +2767,7 @@ var pauseZoom = false;
 ImageAnnotator.prototype.initialize = function (config) {
   const that = this;
       window.$ = $;
+      global.learnmoreLink=''
       const annotations_url = 'https://curio-media.s3.amazonaws.com/oxyrhynchus-papyri/greenstone/taus.json';
       /* make a request for the known annotations */
       $.getJSON(annotations_url)
@@ -2836,6 +2837,7 @@ ImageAnnotator.prototype.initialize = function (config) {
   }
   
       this.client.create('annotation', {//to mark that the worker has watched the tutorial video
+        hitid: window.hitid,
         label: 'submission',
         position: {
           x: 0,
@@ -2930,9 +2932,9 @@ ImageAnnotator.prototype.postInitialize = function (config) {
     const task_counter = $('#task-counter-task-number');
     const completed = parseInt(that.completedTasks) + 1;
     if ($('#main-interface').hasClass('fullscreen')){
-      task_counter.text(`${completed} / 12`);
+      task_counter.text(`${completed} / `+window.image_num_per_set.toString());
     }else{
-      task_counter.text(`Task Progress: ${completed} / 12`);
+      task_counter.text(`Task Progress: ${completed} / `+window.image_num_per_set.toString());
     }
     
     
@@ -2965,25 +2967,9 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
             // alert the user that they're out of tasks to see
             that.modals.finished_modal.modal('open');
-//            if(this.completedTasks>=1){
-//                this.client.create('annotation', {
-//                    label: 'submission',
-//                    duration: that.timer.getTime(),
-//                    position: {
-//                      x: 0,
-//                      y: 0
-//                    },
-//                      dup: false,
-//                      sequence: 12,
-//                      setNum: global.setNum,
-//                  }, (annotation) => {
-//                    // set the id of the annotation html element
-//                });
-//            }
-            
 
             setTimeout(() => {
-                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                 window.location.href = '/';
             }, 1000);
             });
@@ -2993,40 +2979,29 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
             // alert the user that they're out of tasks to see
             that.modals.finished_modal.modal('open');
-//            if(this.completedTasks>=1){
-//                this.client.create('annotation', {
-//                    label: 'submission',
-//                    duration: that.timer.getTime(),
-//                    position: {
-//                      x: 0,
-//                      y: 0
-//                    },
-//                      dup: false,
-//                      sequence: 12,
-//                      setNum: global.setNum,
-//                  }, (annotation) => {
-//                    // set the id of the annotation html element
-//                });
-//            }
-            
-            
 
             setTimeout(() => {
-                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
             // otherwise, increment the user's experiment workflow
             //alert('Heeeey.');
-            // incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+            // incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
             }, 1000);
         }
       } else {
-        console.log('genre: '+task.genre)
+        global.learnmoreLink = task.learnmorelink
+        if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+            $('#examples-container-learnmore').css("visibility", "visible");
+            if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                global.learnmoreLink = 'http://' + global.learnmoreLink;
+            }
+            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+        }else{
+            $('#examples-container-learnmore').css("visibility", "hidden");
+        }
         genres = ['bud','flower','fruit']
         for(var i=0; i<3;i++){//dynamically load the example images.
             for(j = 0; j<3; j++){
                 var elementID = "example-img-"+genres[i]+parseInt(j+1).toString();
-                console.log(elementID)
-                console.log(config.labels[task.genre.toLowerCase()][i].examples[j])
-                console.log('\n')
                 document.getElementById(elementID).innerHTML = "<img src="+config.labels[task.genre.toLowerCase()][i].examples[j]+">";
             }
         }
@@ -3035,7 +3010,18 @@ ImageAnnotator.prototype.postInitialize = function (config) {
         that.client.setData(task.id);
         that.data = task;
         global.oImg.src = task.url
+        global.learnmoreLink = task.learnmorelink
+        if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+          $('#examples-container-learnmore').css("visibility", "visible");
+          if (global.learnmoreLink.substr(0, 4) !== 'http'){
+            global.learnmoreLink = 'http://' + global.learnmoreLink;
+          }
+          $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+        }else{
+          $('#examples-container-learnmore').css("visibility", "hidden");
+        }
         $('.subject').attr('src', task.url);
+                            
         
 
         // handle annotations made outside of a task session
@@ -3101,7 +3087,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
         //if (i === 0) { alert('Error: You cannot submit without making annotations!');   console.log("timer:"); that.timer.stop(); console.log(that.timer.getTime()/1000); return; }//old implementation
 
         that.timer.stop();
-        if(that.timer.getTime()<0){//5 seconds limit fixitfixit
+        if(that.timer.getTime()<window.seconds_before_submit*1000){
             swal({
               confirmButtonColor: '#39ce63',
               title: 'WOW, that was (too) fast!',
@@ -3116,264 +3102,93 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             return ;
         }
         
-        if (i === 0 && !(that.completedTasks == 12-1)) {
-            swal({
-              confirmButtonColor: '#39ce63',
-              title: 'You have not marked any organs. \n\nDo you want to go back and check the example images?\n\n',
-              text: "You can click the buttons on the right side of the interface to see the example images of each organ.",
-              type: 'warning',
-              showCancelButton: true,
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes',
-              cancelButtonText: 'No',
-              allowEscapeKey: false,
-              allowEnterKey: false,
-              allowOutsideClick:    false,
-            })
-            .then((result) => {
-              if (result.value) {
+        if (i === 0 && !(that.completedTasks == window.image_num_per_set-1)) {
+            if(!document.getElementById("mainSubject").complete){
+                swal({
+                     title:'Please Wait',
+                     confirmButtonColor: '#39ce63',
+                     text:'The speciemen image is being loaded. Thank you.',
+                     type:'warning',
+                     allowEscapeKey: false,
+                     allowEnterKey: false,
+                     allowOutsideClick:    false,
+                     }
+                     )
                 return;
-              }else{
-                     that.timer.stop();
-                     if(dejavu&&this.completedTasks==dupIndex1){
-                        bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
-                        fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
-                        frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: false,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                     }
-                     else if(dejavu&&this.completedTasks==dupIndex2){
-                        bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
-                        fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
-                        frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: true,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                     }else{
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: false,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                     }
-                  
-                        // 1.5 validation for forms with questions
-                        const confidenceForm = $('#confidenceTextArea');
-                        const chatWindow = $('#chats');
-                        let confidenceFormVal = '';
-                        if (confidenceForm.length) {
-                        confidenceFormVal = $.trim(confidenceForm.val());
-                        if (!confidenceFormVal) {
-                            alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
-                        }
-                        } else if (chatWindow.length) {
-                        // if the chat is visible, get the last response from the user
-                        const msgs = $('.message.out');
-                        confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
-                        }
-
-                        // stop the timer
-                        that.timer.stop();
-
-                        // close the modal
-                        that.modals.fetching_task_modal.modal('open');
-
-                        // 2. hide the map
-                        $('#map').fadeOut();
-
-                        // 2.5. calculate accuracy
-                        let performance = null;
-                        if (that.mode === 'transcription') {
-                        performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
-                        }
-                        const content = {
-                        confidence: confidenceFormVal,
-                        performance,
-                        taskTime: that.timer.getTime(),
-                        };
-
-                        // 3. save the new response
-                        that.client.create('response', {
-                        content,
-                        }, (result) => {
-                        
-                        console.log('Result after save:');
-                        console.log(result);
-                        console.log(result.id)
-
-                        // reset the surface
-                        ms.resetSurface();
-                        that.timer.reset();
-
-                        // get the next task
-                        that.client.getNextTask(that.currentQueue, (task) => {
-                            $(".toggle-btn").removeClass('success')
-                            $(".example-container").css("display","none")
-                            $("#examples-container-default").html("Click one of the labels to begin counting an object and see related examples.")
-                        
-                            // update the completed task count
-                            that.completedTasks += 1;
-                            window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
-                            genres = ['bud','flower','fruit']
-                            for(var i=0; i<3;i++){//dynamically load the example images.
-                                for(j = 0; j<3; j++){
-                                    var elementID = "example-img-"+genres[i]+parseInt(j+1).toString();
-                                    console.log(elementID)
-                                    console.log(config.labels[task.genre.toLowerCase()][i].examples[j])
-                                    console.log('\n')
-                                    document.getElementById(elementID).innerHTML = "<img src="+config.labels[task.genre.toLowerCase()][i].examples[j]+">";
-                                }
-                            }
-                            /* update the source of the image and trigger the onload event */
-                            that.states.required = { task, markers: {}, map: { x: 0, y: 0 } };
-                            that.client.setData(task.id);
-                            that.data = task;
-                            global.oImg.src = task.url;
-                            $('.subject').attr('src', task.url);
-
-                            // update teh task counter
-                            const task_counter = $('#task-counter-task-number');
-                            const completed = parseInt(that.completedTasks) + 1;
-                            if ($('#main-interface').hasClass('fullscreen')){
-                              task_counter.text(`${completed} / 12`);
-                            }else{
-                              task_counter.text(`Task Progress: ${completed} / 12`);
-                            }
-                    
-
-                            if (config.collaboration) {
-                                if (config.collaboration.active) {
-                                // update the state of the task session
-                                that.client.update('tasksession', {
-                                    id: that.client.task_session.task_session,
-                                    channel_name: that.client.task_session.channel_name,
-                                    data: { type: 'Data', id: task.id },
-                                }, () => {
-                                    // print("Task session updated.")
-                                });
-                                }
-                            }
-
-                            // close the modal
-                            that.modals.fetching_task_modal.modal('close');
-
-                            // if ESM is enabled, show the modal
-                            setTimeout(() => {
-                                if (config.sampling) {
-                                that.modals.survey_efficacy_modal.modal('open');
-                                }
-                            }, 500);
-
-                            // switch the mode back
-                            ms.changeMode(config.mode);
-                            that.timer.start();
-                        });
-                      });
-                    }
+            }else{
+                swal({
+                  confirmButtonColor: '#39ce63',
+                  title: 'You have not marked any organs. \n\nDo you want to go back and check the example images?\n\n',
+                  text: "You can click the buttons on the right side of the interface to see the example images of each organ.",
+                  type: 'warning',
+                  showCancelButton: true,
+                  cancelButtonColor: '#d33',
+                  confirmButtonText: 'Yes',
+                  cancelButtonText: 'No',
+                  allowEscapeKey: false,
+                  allowEnterKey: false,
+                  allowOutsideClick:    false,
                 })
-            }else if (i === 0 && that.completedTasks == 12-1) {
-            swal({
-              confirmButtonColor: '#39ce63',
-              title: 'You have not marked any organs. \n\nDo you want to go back and check the example images?\n\n',
-              text: "You can click the buttons on the right side of the interface to see the example images of each organ.",
-              type: 'warning',
-              showCancelButton: true,
-              cancelButtonColor: '#d33',
-              confirmButtonText: 'Yes',
-              cancelButtonText: 'No',
-              allowEscapeKey: false,
-              allowEnterKey: false,
-              allowOutsideClick:    false,
-            })
-             .then((result) => {
-              if (result.value) {
-                return;
-              }else{
-                    that.timer.stop();
-                    if(dejavu&&this.completedTasks==dupIndex1){
-                        bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
-                        fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
-                        frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: false,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                    }else if(dejavu&&this.completedTasks==dupIndex2){
-                        bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
-                        fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
-                        frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: true,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                     }else{
-                        this.client.create('annotation', {
-                            label: 'submission',
-                            duration: that.timer.getTime(),
-                            position: {
-                              x: 0,
-                              y: 0
-                            },
-                              dup: false,
-                              sequence: this.completedTasks+1,
-                              setNum: global.setNum,
-                          }, (annotation) => {
-                            // set the id of the annotation html element
-                          });
-                     }
-            var dejavuScore = 100 - 100 *   (Math.abs(parseFloat(bdej1)-parseFloat(bdej2)) + Math.abs(parseFloat(fdej1)-parseFloat(fdej2)) + Math.abs(parseFloat(frdej1)-parseFloat(frdej2)))/(parseFloat(bdej1) + parseFloat(bdej2) + parseFloat(fdej1) + parseFloat(fdej2) + parseFloat(frdej1) + parseFloat(frdej2));
-            if(parseInt(bdej1)+parseInt(bdej2)+parseInt(fdej1)+parseInt(fdej2)+parseInt(frdej1)+parseInt(frdej2)==0){//all counts are 0
-                   dejavuScore = 100;
-            }
-            if(dejavuScore < 80){
-                            that.modals.experiment_complete_modal.modal('open');
+                .then((result) => {
+                  if (result.value) {
+                    return;
+                  }else{
+                         that.timer.stop();
+                         if(window.dejavu=='True'&&this.completedTasks==dupIndex1){
+                            bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
+                            fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
+                            frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: false,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                         }
+                         else if(window.dejavu=='True'&&this.completedTasks==dupIndex2){
+                            bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
+                            fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
+                            frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: true,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                         }else{
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: false,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                         }
+                      
+                            // 1.5 validation for forms with questions
                             const confidenceForm = $('#confidenceTextArea');
                             const chatWindow = $('#chats');
                             let confidenceFormVal = '';
@@ -3387,266 +3202,491 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                             const msgs = $('.message.out');
                             confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
                             }
-                                // 2.5. calculate accuracy
-                                let performance = null;
-                                const content = {
-                                confidence: confidenceFormVal,
-                                performance,
-                                taskTime: that.timer.getTime(),
-                                };
 
-                                // 3. save the new response
-                            that.client.create('response', {
-                                content,
-                                }, (result) => {
-                                // reset the surface
-                                ms.resetSurface();
-                                that.timer.reset();
-                                setTimeout(() => {
-                                        // otherwise, increment the user's experiment workflow
-                                        // alert("This should transition the user.");
-                                        that.completedTasks = 0;
-                                        console.log("next stage");
-                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
-                                }, 1000);
-                            });
-              }else{
-                  swal({
-                      confirmButtonColor: '#39ce63',
-                      title: 'Do you want to work on 12 more images?',
-                      showCancelButton: true,
-                      cancelButtonColor: '#d33',
-                      confirmButtonText: 'Yes',
-                      cancelButtonText: 'No',
-                      allowEscapeKey: false,
-                      allowEnterKey: false,
-                      allowOutsideClick:   false,
-                    })
-                 .then((result) => {
-                        if(result.value){
-                            that.completedTasks = -1;
-                         // 1.5 validation for forms with questions
-                        const confidenceForm = $('#confidenceTextArea');
-                        const chatWindow = $('#chats');
-                        let confidenceFormVal = '';
-                        if (confidenceForm.length) {
-                        confidenceFormVal = $.trim(confidenceForm.val());
-                        if (!confidenceFormVal) {
-                            alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
-                        }
-                        } else if (chatWindow.length) {
-                        // if the chat is visible, get the last response from the user
-                        const msgs = $('.message.out');
-                        confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
-                        }
+                            // stop the timer
+                            that.timer.stop();
 
-                        // stop the timer
-                        that.timer.stop();
+                            // close the modal
+                            that.modals.fetching_task_modal.modal('open');
 
-                        // close the modal
-                        that.modals.fetching_task_modal.modal('open');
+                            // 2. hide the map
+                            $('#map').fadeOut();
 
-                        // 2. hide the map
-                        $('#map').fadeOut();
-
-                        // 2.5. calculate accuracy
-                        let performance = null;
-                        if (that.mode === 'transcription') {
-                        performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
-                        }
-                        const content = {
-                        confidence: confidenceFormVal,
-                        performance,
-                        taskTime: that.timer.getTime(),
-                        };
-
-                        // 3. save the new response
-                        that.client.create('response', {
-                        content,
-                        }, (result) => {
-                        
-                        console.log('Result after save:');
-                        console.log(result);
-                        console.log(result.id)
-
-                        // reset the surface
-                        ms.resetSurface();
-                        that.timer.reset();
-
-                        // get the next task
-                        that.client.getNextTask(that.currentQueue, (task) => {
-                            $(".toggle-btn").removeClass('success')
-                            $(".example-container").css("display","none")
-                            $("#examples-container-default").html("Click one of the labels to begin counting an object and see related examples.")
-                            // update the completed task count
-                            that.completedTasks += 1;
-                            if(that.completedTasks == 0){
-                                    global.setNum += 1;
-                                    if(global.setNum >= 2){
-                                            $("#exit-button").css("display", "block");
-                                            $("#exit-button").css("visibility", "visible");
-                                    }
+                            // 2.5. calculate accuracy
+                            let performance = null;
+                            if (that.mode === 'transcription') {
+                            performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
                             }
-                            window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
+                            const content = {
+                            confidence: confidenceFormVal,
+                            performance,
+                            taskTime: that.timer.getTime(),
+                            };
 
-                          if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= 12) {
-                            if (window.experiment === undefined) {
-                                that.client.update('taskmember', {
-                                id: window.task_member,
-                                seen_all: true,
-                                }, (result) => {
+                            // 3. save the new response
+                            that.client.create('response', {
+                            content,
+                            }, (result) => {
+                            
+                            console.log('Result after save:');
+                            console.log(result);
+                            console.log(result.id)
+
+                            // reset the surface
+                            ms.resetSurface();
+                            that.timer.reset();
+
+                            // get the next task
+                            that.client.getNextTask(that.currentQueue, (task) => {
+                                $(".toggle-btn").removeClass('success')
+                                $(".example-container").css("display","none")
+                                $("#examples-container-default").html("Click one of the labels to begin counting an object and see related examples.")
+                                // update the completed task count
+                                that.completedTasks += 1;
+                                window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
+                                genres = ['bud','flower','fruit']
+                                for(var i=0; i<3;i++){//dynamically load the example images.
+                                    for(j = 0; j<3; j++){
+                                        var elementID = "example-img-"+genres[i]+parseInt(j+1).toString();
+                                        console.log(elementID)
+                                        console.log(config.labels[task.genre.toLowerCase()][i].examples[j])
+                                        console.log('\n')
+                                        document.getElementById(elementID).innerHTML = "<img src="+config.labels[task.genre.toLowerCase()][i].examples[j]+">";
+                                    }
+                                }
+                                /* update the source of the image and trigger the onload event */
+                                that.states.required = { task, markers: {}, map: { x: 0, y: 0 } };
+                                that.client.setData(task.id);
+                                that.data = task;
+                                global.oImg.src = task.url;
+                                global.learnmoreLink = task.learnmorelink
+                                if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+                                  $('#examples-container-learnmore').css("visibility", "visible");
+                                  if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                                    global.learnmoreLink = 'http://' + global.learnmoreLink;
+                                  }
+                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                                }else{
+                                  $('#examples-container-learnmore').css("visibility", "hidden");
+                                }
+                                $('.subject').attr('src', task.url);
+
+                                // update teh task counter
+                                const task_counter = $('#task-counter-task-number');
+                                const completed = parseInt(that.completedTasks) + 1;
+                                if ($('#main-interface').hasClass('fullscreen')){
+                                  task_counter.text(`${completed} / `+window.image_num_per_set.toString());
+                                }else{
+                                  task_counter.text(`Task Progress: ${completed} / `+window.image_num_per_set.toString());
+                                }
+                        
+
+                                if (config.collaboration) {
+                                    if (config.collaboration.active) {
+                                    // update the state of the task session
+                                    that.client.update('tasksession', {
+                                        id: that.client.task_session.task_session,
+                                        channel_name: that.client.task_session.channel_name,
+                                        data: { type: 'Data', id: task.id },
+                                    }, () => {
+                                        // print("Task session updated.")
+                                    });
+                                    }
+                                }
+
                                 // close the modal
-                                that.modals.loading_modal.modal('close');
-                                swal({
-                                        confirmButtonColor: '#39ce63',
-                                        title: 'Sorry, all images have been assigned to workers.',
-                                        showCancelButton: true,
-                                        allowEscapeKey: false,
-                                        allowEnterKey: false,
-                                        allowOutsideClick:   false,
-                                }).then((result) => {
+                                that.modals.fetching_task_modal.modal('close');
+
+                                // if ESM is enabled, show the modal
+                                setTimeout(() => {
+                                    if (config.sampling) {
+                                    that.modals.survey_efficacy_modal.modal('open');
+                                    }
+                                }, 500);
+
+                                // switch the mode back
+                                ms.changeMode(config.mode);
+                                that.timer.start();
+                            });
+                          });
+                        }
+                    })
+                }
+            }else if (i === 0 && that.completedTasks == window.image_num_per_set-1) {
+                if(!document.getElementById("mainSubject").complete){
+                    swal({
+                         title:'Please Wait',
+                         confirmButtonColor: '#39ce63',
+                         text:'The speciemen image is being loaded. Thank you.',
+                         type:'warning',
+                         allowEscapeKey: false,
+                         allowEnterKey: false,
+                         allowOutsideClick:    false,
+                         }
+                         )
+                    return;
+                }else{
+                swal({
+                  confirmButtonColor: '#39ce63',
+                  title: 'You have not marked any organs. \n\nDo you want to go back and check the example images?\n\n',
+                  text: "You can click the buttons on the right side of the interface to see the example images of each organ.",
+                  type: 'warning',
+                  showCancelButton: true,
+                  cancelButtonColor: '#d33',
+                  confirmButtonText: 'Yes',
+                  cancelButtonText: 'No',
+                  allowEscapeKey: false,
+                  allowEnterKey: false,
+                  allowOutsideClick:    false,
+                })
+                 .then((result) => {
+                  if (result.value) {
+                    return;
+                  }else{
+                        that.timer.stop();
+                        if(window.dejavu=='True'&&this.completedTasks==dupIndex1){
+                            bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
+                            fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
+                            frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: false,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                        }else if(window.dejavu=='True'&&this.completedTasks==dupIndex2){
+                            bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
+                            fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
+                            frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: true,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                         }else{
+                            this.client.create('annotation', {
+                                hitid: window.hitid,
+                                label: 'submission',
+                                duration: that.timer.getTime(),
+                                position: {
+                                  x: 0,
+                                  y: 0
+                                },
+                                  dup: false,
+                                  sequence: this.completedTasks+1,
+                                  setNum: global.setNum,
+                              }, (annotation) => {
+                                // set the id of the annotation html element
+                              });
+                         }
+                var dejavuScore = 100 - 100 *   (Math.abs(parseFloat(bdej1)-parseFloat(bdej2)) + Math.abs(parseFloat(fdej1)-parseFloat(fdej2)) + Math.abs(parseFloat(frdej1)-parseFloat(frdej2)))/(parseFloat(bdej1) + parseFloat(bdej2) + parseFloat(fdej1) + parseFloat(fdej2) + parseFloat(frdej1) + parseFloat(frdej2));
+                if(parseInt(bdej1)+parseInt(bdej2)+parseInt(fdej1)+parseInt(fdej2)+parseInt(frdej1)+parseInt(frdej2)==0){//all counts are 0
+                       dejavuScore = 100;
+                }
+                if(dejavuScore < window.dejavu_passing_score){//fixitfixit
+                                that.modals.experiment_complete_modal.modal('open');
+                                const confidenceForm = $('#confidenceTextArea');
+                                const chatWindow = $('#chats');
+                                let confidenceFormVal = '';
+                                if (confidenceForm.length) {
+                                confidenceFormVal = $.trim(confidenceForm.val());
+                                if (!confidenceFormVal) {
+                                    alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
+                                }
+                                } else if (chatWindow.length) {
+                                // if the chat is visible, get the last response from the user
+                                const msgs = $('.message.out');
+                                confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
+                                }
+                                    // 2.5. calculate accuracy
+                                    let performance = null;
+                                    const content = {
+                                    confidence: confidenceFormVal,
+                                    performance,
+                                    taskTime: that.timer.getTime(),
+                                    };
+
+                                    // 3. save the new response
+                                that.client.create('response', {
+                                    content,
+                                    }, (result) => {
+                                    // reset the surface
+                                    ms.resetSurface();
+                                    that.timer.reset();
+                                    setTimeout(() => {
+                                            // otherwise, increment the user's experiment workflow
+                                            // alert("This should transition the user.");
+                                            that.completedTasks = 0;
+                                            console.log("next stage");
+                                            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
+                                    }, 1000);
+                                });
+                  }else{
+                      swal({
+                          confirmButtonColor: '#39ce63',
+                          title: 'Do you want to work on '+window.image_num_per_set.toString()+' more images?',
+                          showCancelButton: true,
+                          cancelButtonColor: '#d33',
+                          confirmButtonText: 'Yes',
+                          cancelButtonText: 'No',
+                          allowEscapeKey: false,
+                          allowEnterKey: false,
+                          allowOutsideClick:   false,
+                        })
+                     .then((result) => {
+                            if(result.value){
+                                that.completedTasks = -1;
+                             // 1.5 validation for forms with questions
+                            const confidenceForm = $('#confidenceTextArea');
+                            const chatWindow = $('#chats');
+                            let confidenceFormVal = '';
+                            if (confidenceForm.length) {
+                            confidenceFormVal = $.trim(confidenceForm.val());
+                            if (!confidenceFormVal) {
+                                alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
+                            }
+                            } else if (chatWindow.length) {
+                            // if the chat is visible, get the last response from the user
+                            const msgs = $('.message.out');
+                            confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
+                            }
+
+                            // stop the timer
+                            that.timer.stop();
+
+                            // close the modal
+                            that.modals.fetching_task_modal.modal('open');
+
+                            // 2. hide the map
+                            $('#map').fadeOut();
+
+                            // 2.5. calculate accuracy
+                            let performance = null;
+                            if (that.mode === 'transcription') {
+                            performance = that.calculateAccuracy(that.data.name.split('-')[0].replace('.pn', ''));
+                            }
+                            const content = {
+                            confidence: confidenceFormVal,
+                            performance,
+                            taskTime: that.timer.getTime(),
+                            };
+
+                            // 3. save the new response
+                            that.client.create('response', {
+                            content,
+                            }, (result) => {
+                            
+                            console.log('Result after save:');
+                            console.log(result);
+                            console.log(result.id)
+
+                            // reset the surface
+                            ms.resetSurface();
+                            that.timer.reset();
+
+                            // get the next task
+                            that.client.getNextTask(that.currentQueue, (task) => {
+                                $(".toggle-btn").removeClass('success')
+                                $(".example-container").css("display","none")
+                                $("#examples-container-default").html("Click one of the labels to begin counting an object and see related examples.")
+                                // update the completed task count
+                                that.completedTasks += 1;
+                                if(that.completedTasks == 0){
+                                        global.setNum += 1;
+                                        if(global.setNum >= 2){
+                                                $("#exit-button").css("display", "block");
+                                                $("#exit-button").css("visibility", "visible");
+                                        }
+                                }
+                                window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
+
+                              if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= window.image_num_per_set) {
+                                if (window.experiment === undefined) {
+                                    that.client.update('taskmember', {
+                                    id: window.task_member,
+                                    seen_all: true,
+                                    }, (result) => {
+                                    swal({
+                                            confirmButtonColor: '#39ce63',
+                                            title: 'Sorry, all images have been assigned to workers.',
+                                            showCancelButton: true,
+                                            allowEscapeKey: false,
+                                            allowEnterKey: false,
+                                            allowOutsideClick:   false,
+                                    }).then((result) => {
+                                        // close the modal
+                                        that.modals.loading_modal.modal('close');
+                                        that.modals.experiment_complete_modal.modal('open');
+                                        setTimeout(() => {
+                                                   incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
+                                                   window.location.href = '/';
+                                                   }, 1000);
+                                        });
+                                    })
+                                    // alert the user that they're out of tasks to see
+                                    that.modals.finished_modal.modal('open');
+                                } else {
+                                    // alert the user that they're out of tasks to see
+                                    //that.modals.finished_modal.modal('open');
+                                    swal({
+                                         confirmButtonColor: '#39ce63',
+                                         title: 'Sorry, all images have been assigned to workers.',
+                                         confirmButtonText: 'Got it',
+                                         allowEscapeKey: false,
+                                         allowEnterKey: false,
+                                         allowOutsideClick:   false,
+                                     }).then((result) => {
+                                             // close the modal
+                                             that.modals.loading_modal.modal('close');
+                                             that.modals.experiment_complete_modal.modal('open');
+                                             
+                                             setTimeout(() => {
+                                                        // otherwise, increment the user's experiment workflow
+                                                        // alert("This should transition the user.");
+                                                        that.completedTasks = 0;
+                                                        console.log("next stage");
+                                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
+                                            }, 1000);
+                                    })
+
+                                }
+                              } else {
+                                genres = ['bud','flower','fruit']
+                                for(var i=0; i<3;i++){//dynamically load the example images.
+                                    for(j = 0; j<3; j++){
+                                        var elementID = "example-img-"+genres[i]+parseInt(j+1).toString();
+                                        console.log(elementID)
+                                        console.log(config.labels[task.genre.toLowerCase()][i].examples[j])
+                                        console.log('\n')
+                                        document.getElementById(elementID).innerHTML = "<img src="+config.labels[task.genre.toLowerCase()][i].examples[j]+">";
+                                    }
+                                }
+                                /* update the source of the image and trigger the onload event */
+                                that.states.required = { task, markers: {}, map: { x: 0, y: 0 } };
+                                that.client.setData(task.id);
+                                that.data = task;
+                                global.oImg.src = task.url;
+                                global.learnmoreLink = task.learnmorelink
+                                if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+                                  $('#examples-container-learnmore').css("visibility", "visible");
+                                  if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                                    global.learnmoreLink = 'http://' + global.learnmoreLink;
+                                  }
+                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                                }else{
+                                  $('#examples-container-learnmore').css("visibility", "hidden");
+                                }
+                                $('.subject').attr('src', task.url);
+
+                                // update teh task counter
+                                const task_counter = $('#task-counter-task-number');
+                                const completed = parseInt(that.completedTasks) + 1;
+                                if ($('#main-interface').hasClass('fullscreen')){
+                                  task_counter.text(`${completed} / `+window.image_num_per_set.toString());
+                                }else{
+                                  task_counter.text(`Task Progress: ${completed} / `+window.image_num_per_set.toString());
+                                }
+                        
+
+                                if (config.collaboration) {
+                                    if (config.collaboration.active) {
+                                    // update the state of the task session
+                                    that.client.update('tasksession', {
+                                        id: that.client.task_session.task_session,
+                                        channel_name: that.client.task_session.channel_name,
+                                        data: { type: 'Data', id: task.id },
+                                    }, () => {
+                                        // print("Task session updated.")
+                                    });
+                                    }
+                                }
+
+                                // close the modal
+                                that.modals.fetching_task_modal.modal('close');
+
+                                // if ESM is enabled, show the modal
+                                setTimeout(() => {
+                                    if (config.sampling) {
+                                    that.modals.survey_efficacy_modal.modal('open');
+                                    }
+                                }, 500);
+
+                                // switch the mode back
+                                ms.changeMode(config.mode);
+                                that.timer.start();
+                                }
+                            });
+                          });
+                            }else{
+
+                                const confidenceForm = $('#confidenceTextArea');
+                                const chatWindow = $('#chats');
+                                let confidenceFormVal = '';
+                                if (confidenceForm.length) {
+                                confidenceFormVal = $.trim(confidenceForm.val());
+                                if (!confidenceFormVal) {
+                                    alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
+                                }
+                                } else if (chatWindow.length) {
+                                // if the chat is visible, get the last response from the user
+                                const msgs = $('.message.out');
+                                confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
+                                }
+                                    // 2.5. calculate accuracy
+                                    let performance = null;
+                                    const content = {
+                                    confidence: confidenceFormVal,
+                                    performance,
+                                    taskTime: that.timer.getTime(),
+                                    };
+
+                                    // 3. save the new response
+                                that.client.create('response', {
+                                    content,
+                                    }, (result) => {
+                                    // reset the surface
+                                    ms.resetSurface();
+                                    that.timer.reset();
                                     that.modals.experiment_complete_modal.modal('open');
                                     setTimeout(() => {
-                                               incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
-                                               window.location.href = '/';
-                                               }, 1000);
-                                    });
-                                })
-                                // alert the user that they're out of tasks to see
-                                that.modals.finished_modal.modal('open');
-                            } else {
-                                // close the modal
-                                that.modals.loading_modal.modal('close');
-                                // alert the user that they're out of tasks to see
-                                //that.modals.finished_modal.modal('open');
-                                swal({
-                                     confirmButtonColor: '#39ce63',
-                                     title: 'Sorry, all images have been assigned to workers.',
-                                     confirmButtonText: 'Got it',
-                                     allowEscapeKey: false,
-                                     allowEnterKey: false,
-                                     allowOutsideClick:   false,
-                                 }).then((result) => {
-                                         that.modals.experiment_complete_modal.modal('open');
-                                         
-                                         setTimeout(() => {
-                                                    // otherwise, increment the user's experiment workflow
-                                                    // alert("This should transition the user.");
-                                                    that.completedTasks = 0;
-                                                    console.log("next stage");
-                                                    incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
-                                        }, 1000);
-                                })
-
-                            }
-                          } else {
-                            genres = ['bud','flower','fruit']
-                            for(var i=0; i<3;i++){//dynamically load the example images.
-                                for(j = 0; j<3; j++){
-                                    var elementID = "example-img-"+genres[i]+parseInt(j+1).toString();
-                                    console.log(elementID)
-                                    console.log(config.labels[task.genre.toLowerCase()][i].examples[j])
-                                    console.log('\n')
-                                    document.getElementById(elementID).innerHTML = "<img src="+config.labels[task.genre.toLowerCase()][i].examples[j]+">";
-                                }
-                            }
-                            /* update the source of the image and trigger the onload event */
-                            that.states.required = { task, markers: {}, map: { x: 0, y: 0 } };
-                            that.client.setData(task.id);
-                            that.data = task;
-                            global.oImg.src = task.url;
-                            $('.subject').attr('src', task.url);
-
-                            // update teh task counter
-                            const task_counter = $('#task-counter-task-number');
-                            const completed = parseInt(that.completedTasks) + 1;
-                            if ($('#main-interface').hasClass('fullscreen')){
-                              task_counter.text(`${completed} / 12`);
-                            }else{
-                              task_counter.text(`Task Progress: ${completed} / 12`);
-                            }
-                    
-
-                            if (config.collaboration) {
-                                if (config.collaboration.active) {
-                                // update the state of the task session
-                                that.client.update('tasksession', {
-                                    id: that.client.task_session.task_session,
-                                    channel_name: that.client.task_session.channel_name,
-                                    data: { type: 'Data', id: task.id },
-                                }, () => {
-                                    // print("Task session updated.")
+                                            // otherwise, increment the user's experiment workflow
+                                            // alert("This should transition the user.");
+                                            that.completedTasks = 0;
+                                            console.log("next stage");
+                                            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
+                                    }, 1000);
                                 });
-                                }
                             }
-
-                            // close the modal
-                            that.modals.fetching_task_modal.modal('close');
-
-                            // if ESM is enabled, show the modal
-                            setTimeout(() => {
-                                if (config.sampling) {
-                                that.modals.survey_efficacy_modal.modal('open');
-                                }
-                            }, 500);
-
-                            // switch the mode back
-                            ms.changeMode(config.mode);
-                            that.timer.start();
-                            }
-                        });
-                      });
-                        }else{
-
-                            const confidenceForm = $('#confidenceTextArea');
-                            const chatWindow = $('#chats');
-                            let confidenceFormVal = '';
-                            if (confidenceForm.length) {
-                            confidenceFormVal = $.trim(confidenceForm.val());
-                            if (!confidenceFormVal) {
-                                alert('Error: You must state how well you did before you can submit.'); confidenceForm.focus(); return;
-                            }
-                            } else if (chatWindow.length) {
-                            // if the chat is visible, get the last response from the user
-                            const msgs = $('.message.out');
-                            confidenceFormVal = msgs[msgs.length - 1].children[1].children[0].children[0].children[0].innerHTML;
-                            }
-                                // 2.5. calculate accuracy
-                                let performance = null;
-                                const content = {
-                                confidence: confidenceFormVal,
-                                performance,
-                                taskTime: that.timer.getTime(),
-                                };
-
-                                // 3. save the new response
-                            that.client.create('response', {
-                                content,
-                                }, (result) => {
-                                // reset the surface
-                                ms.resetSurface();
-                                that.timer.reset();
-                                that.modals.experiment_complete_modal.modal('open');
-                                setTimeout(() => {
-                                        // otherwise, increment the user's experiment workflow
-                                        // alert("This should transition the user.");
-                                        that.completedTasks = 0;
-                                        console.log("next stage");
-                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
-                                }, 1000);
-                            });
-                        }
-                    })
-                  }
+                        })
+                      }
+                    }
+                 })
                 }
-             })
-            }else if(that.completedTasks == 12-1){
+            }else if(that.completedTasks == window.image_num_per_set-1){
                     that.timer.stop();
-                    if(dejavu&&this.completedTasks==dupIndex1){
+                    if(window.dejavu=='True'&&this.completedTasks==dupIndex1){
                         bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
                         fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
                         frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -3659,11 +3699,12 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                           }, (annotation) => {
                             // set the id of the annotation html element
                           });
-                    }else if(dejavu&&this.completedTasks==dupIndex2){
+                    }else if(window.dejavu=='True'&&this.completedTasks==dupIndex2){
                         bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
                         fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
                         frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -3678,6 +3719,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                           });
                      }else{
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -3695,7 +3737,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
               if(parseInt(bdej1)+parseInt(bdej2)+parseInt(fdej1)+parseInt(fdej2)+parseInt(frdej1)+parseInt(frdej2)==0){//all counts are 0
                     dejavuScore = 100;
               }
-              if(dejavuScore < 80){
+              
+              if(dejavuScore < window.dejavu_passing_score){
                             that.modals.experiment_complete_modal.modal('open');
                             const confidenceForm = $('#confidenceTextArea');
                             const chatWindow = $('#chats');
@@ -3730,13 +3773,13 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                         // alert("This should transition the user.");
                                         that.completedTasks = 0;
                                         console.log("next stage");
-                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                 }, 1000);
                             });
               }else{
                   swal({
                       confirmButtonColor: '#39ce63',
-                      title: 'Do you want to work on 12 more images?',
+                      title: 'Do you want to work on '+window.image_num_per_set.toString()+' more images?',
                       showCancelButton: true,
                       cancelButtonColor: '#d33',
                       confirmButtonText: 'Yes',
@@ -3812,14 +3855,12 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                             }
                             window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
 
-                          if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= 12) {
+                          if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= window.image_num_per_set) {
                             if (window.experiment === undefined) {
                                 that.client.update('taskmember', {
                                 id: window.task_member,
                                 seen_all: true,
                                 }, (result) => {
-                                // close the modal
-                                that.modals.loading_modal.modal('close');
                                 swal({
                                     confirmButtonColor: '#39ce63',
                                     title: 'Sorry, all images have been assigned to workers.',
@@ -3828,6 +3869,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                     allowEnterKey: false,
                                     allowOutsideClick:   false,
                                      }).then((result) => {
+                                             // close the modal
+                                             that.modals.loading_modal.modal('close');
                                              that.modals.experiment_complete_modal.modal('open');
                                              
                                              setTimeout(() => {
@@ -3835,13 +3878,11 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                                         // alert("This should transition the user.");
                                                         that.completedTasks = 0;
                                                         console.log("next stage");
-                                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                                         }, 1000);
                                     })
                                 });
                             } else {
-                                // close the modal
-                                that.modals.loading_modal.modal('close');
                                 // alert the user that they're out of tasks to see
                                 that.modals.experiment_complete_modal.modal('open');
                                 swal({
@@ -3852,6 +3893,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                      allowEnterKey: false,
                                      allowOutsideClick:   false,
                                  }).then((result) => {
+                                         // close the modal
+                                         that.modals.loading_modal.modal('close');
                                          that.modals.experiment_complete_modal.modal('open');
                                          
                                          setTimeout(() => {
@@ -3859,7 +3902,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                                     // alert("This should transition the user.");
                                                     that.completedTasks = 0;
                                                     console.log("next stage");
-                                                    incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                                    incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                                     }, 1000);
                                 })
                             }
@@ -3879,15 +3922,25 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                             that.client.setData(task.id);
                             that.data = task;
                             global.oImg.src = task.url;
+                            global.learnmoreLink = task.learnmorelink
+                            if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+                              $('#examples-container-learnmore').css("visibility", "visible");
+                              if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                                global.learnmoreLink = 'http://' + global.learnmoreLink;
+                              }
+                              $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                            }else{
+                              $('#examples-container-learnmore').css("visibility", "hidden");
+                            }
                             $('.subject').attr('src', task.url);
 
                             // update teh task counter
                             const task_counter = $('#task-counter-task-number');
                             const completed = parseInt(that.completedTasks) + 1;
                             if ($('#main-interface').hasClass('fullscreen')){
-                              task_counter.text(`${completed} / 12`);
+                              task_counter.text(`${completed} / `+window.image_num_per_set.toString());
                             }else{
-                              task_counter.text(`Task Progress: ${completed} / 12`);
+                              task_counter.text(`Task Progress: ${completed} / `+window.image_num_per_set.toString());
                             }
                     
 
@@ -3955,7 +4008,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                         // alert("This should transition the user.");
                                         that.completedTasks = 0;
                                         console.log("next stage");
-                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                 }, 1000);
                             });
                        
@@ -3967,11 +4020,12 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                 }else{
                 // 1.5 validation for forms with questions
                 that.timer.stop();
-                     if(dejavu&&this.completedTasks==dupIndex1){
+                     if(window.dejavu=='True'&&this.completedTasks==dupIndex1){
                         bdej1 = parseInt(document.getElementById("bud-count").innerHTML);
                         fdej1 = parseInt(document.getElementById("flower-count").innerHTML);
                         frdej1 = parseInt(document.getElementById("fruit-count").innerHTML);
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -3984,11 +4038,12 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                           }, (annotation) => {
                             // set the id of the annotation html element
                           });
-                    }else if(dejavu&&this.completedTasks==dupIndex2){
+                    }else if(window.dejavu=='True'&&this.completedTasks==dupIndex2){
                         bdej2 = parseInt(document.getElementById("bud-count").innerHTML);
                         fdej2 = parseInt(document.getElementById("flower-count").innerHTML);
                         frdej2 = parseInt(document.getElementById("fruit-count").innerHTML);
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -4003,6 +4058,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                           });
                      }else{
                         this.client.create('annotation', {
+                            hitid: window.hitid,
                             label: 'submission',
                             duration: that.timer.getTime(),
                             position: {
@@ -4081,7 +4137,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     }
                     window.localStorage.setItem(`crowdcurio-tau-${window.experiment}-completed-tasks`, that.completedTasks);
 
-                  if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= 12) {
+                  if ((Object.keys(task).length === 0 && task.constructor === Object) || that.completedTasks >= window.image_num_per_set) {
                     if (window.experiment === undefined) {
                         that.client.update('taskmember', {
                         id: window.task_member,
@@ -4093,7 +4149,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                         // alert the user that they're out of tasks to see
                         that.modals.finished_modal.modal('open');
                         setTimeout(() => {
-                            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                             window.location.href = '/';
                         }, 1000);
                         });
@@ -4109,7 +4165,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                         // alert("This should transition the user.");
                         that.completedTasks = 0;
                         console.log("next stage");
-                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                        incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                         }, 1000);
                     }
                   } else {
@@ -4128,14 +4184,24 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     that.client.setData(task.id);
                     that.data = task;
                     global.oImg.src = task.url;
+                    global.learnmoreLink = task.learnmorelink
+                    if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+                      $('#examples-container-learnmore').css("visibility", "visible");
+                      if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                        global.learnmoreLink = 'http://' + global.learnmoreLink;
+                      }
+                      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                    }else{
+                      $('#examples-container-learnmore').css("visibility", "hidden");
+                    }
                     $('.subject').attr('src', task.url);
                     // update teh task counter
                     const task_counter = $('#task-counter-task-number');
                     const completed = parseInt(that.completedTasks) + 1;
                     if ($('#main-interface').hasClass('fullscreen')){
-                      task_counter.text(`${completed} / 12`);
+                      task_counter.text(`${completed} / `+window.image_num_per_set.toString());
                     }else{
-                      task_counter.text(`Task Progress: ${completed} / 12`);
+                      task_counter.text(`Task Progress: ${completed} / `+window.image_num_per_set.toString());
                     }
             
 
@@ -4176,7 +4242,6 @@ ImageAnnotator.prototype.postInitialize = function (config) {
         that.onNextTask();
     });
       
-    //fixitfixit
     $('#exit-button').click((e) => {
         swal({
              confirmButtonColor: '#39ce63',
@@ -4197,7 +4262,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                 var unassignDataOne = [];
                 var unassignDataTwo = [];
                 var unassignDataThree = [];
-                this.client.listAll('data', {                                   //fixitfixit unassign the assigned data
+                this.client.listAll('data', {                                   //unassign the assigned data
                                   experiment: window.experiment,
                                   testassignedtoone: window.user,
                                   }, (images) => {
@@ -4254,7 +4319,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                                                                              });
                                                                           }
                                                                           setTimeout(() => {
-                                                                                     incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                                                                     incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                                                                      }, 5000);
                                                                           });
                                                       
@@ -4325,7 +4390,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                   allowOutsideClick:    false,
                 })
                 .then((result) => {
-                    that.onNextTask(0,0,0,0,0,0,0,0,0, passTest)
+                    that.onNextTask(0,0,0,0,0,0,0,0, passTest)
                 })
         }else if(this.completedTasks==0 && test1Attempts==0){//first visit of the tests
         
@@ -4453,26 +4518,11 @@ ImageAnnotator.prototype.postInitialize = function (config) {
 
           // alert the user that they're out of tasks to see
           that.modals.finished_modal.modal('open');
-//            if(this.completedTasks>=1){
-//                this.client.create('annotation', {
-//                    label: 'submission',
-//                    duration: that.timer.getTime(),
-//                    position: {
-//                      x: 0,
-//                      y: 0
-//                    },
-//                      dup: false,
-//                      sequence: 12,
-//                      setNum: global.setNum,
-//                  }, (annotation) => {
-//                    // set the id of the annotation html element
-//                });
-//            }
 
           setTimeout(() => {
             // otherwise, increment the user's experiment workflow
             //alert('Heeeey.');
-            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
           }, 1000);
         }
     }else{
@@ -4492,11 +4542,21 @@ ImageAnnotator.prototype.postInitialize = function (config) {
        that.states.required = { test:testTasks[that.completedTasks], markers: {}, map: { x: 0, y: 0 } };
        that.data = testTasks[that.completedTasks];
        global.oImg.src = testTasks[that.completedTasks].url;
+       global.learnmoreLink = task.learnmorelink//fixitfixit
+        if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+            $('#examples-container-learnmore').css("visibility", "visible");
+            if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                global.learnmoreLink = 'http://' + global.learnmoreLink;
+            }
+            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+        }else{
+            $('#examples-container-learnmore').css("visibility", "hidden");
+        }
        $('.subject').attr('src', testTasks[that.completedTasks].url);
        ms.changeMode(config.mode);
     }
 
-    that.onNextTask = function (score, passScore, bCount,bSol,fCount,fSol,frCount,frSol, sequence, passedTest) {
+    that.onNextTask = function (score, bCount,bSol,fCount,fSol,frCount,frSol, sequence, passedTest) {
       var output = "";
       for(key in ms.markers){//jarvis code to produce answers
         output = output+ "{\"x\": "+ms.markers[key]["x"]+" , \"y\": "+ms.markers[key]["y"]+", \"label\": \'"+ms.markers[key]["label"]+"\'},\n";
@@ -4504,8 +4564,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
       if(passedTest == 'True'){
       //fixit
       that.modals.fetching_task_modal.modal('open');
-      incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
-      }else if(score<passScore){
+      incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
+      }else if(score < window.test_passing_score){
             if(sequence==1){
                 test1Attempts = parseInt(test1Attempts)+1;
                 //alert("The solution will be opened in a new tab.");
@@ -4532,8 +4592,8 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     orgimg.arr = ms.markers;
                     orgimg.sArr = ad[sequence-1]["coordinates"];
                     orgimg.onload = function(){
-                    var scale = 650/orgimg.width;
-                      newWindow.document.write("<html><head><link rel='icon' href='http://mercury.crowdcurio.com/static/img/favicon.png' /><link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css' integrity='sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u' crossorigin='anonymous'></head><title>Solution</title><body style='background-color:#5b8747'><div style='border-width:2px; border-style:solid;text-align:center;max-width:850px;min-width:700px;height:60px;position:relative;left:20%;top:13px;'><div style='display:table;font-size:30px;position:relative;top:4px;width:100%;height:100%;'> <div style='table-row;' align='center'><div style='display:table-cell;width:20%'> Legends: </div>  <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='bbtn' value='on' style='background-color:#2fd820;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Bud</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='fbtn' value='on' style='background-color:#009ffc;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Flower</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='frbtn' value='on' style='background-color:#ff63f1;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Fruit</Button> </div>    </div></div>       </div><div style='width:1400px;position:relative;text-align:center'><div style='float:left; width:700px;'><div style='position:relative;'><h2>Solution:</h2></div><div style='position:relative'><img id='solImg' alt='Answer' style='width:650px' src="+testTasks[sequence-1].url+" style='width:650px;position:absolute; top:0px; left:15px;z-index:0;'>                                                                                                                                                                                                                                           <canvas id='budSCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerSCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitSCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.sArr)+";  var bcanvas = document.getElementById('budSCanvas'); var fcanvas = document.getElementById('flowerSCanvas'); var frcanvas = document.getElementById('fruitSCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d');                                     var i; for(i=0;i<"+ this.sArr.length +";i+=1){var xCor = (arr[i].x)*"+scale+"; var yCor = (arr[i].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[i].label; var radius = 10; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();}  }  </script>    </div>                                                                                                                                                                                                                                                                                                                                           </div><div style='float:right;width:700px;position:relative;'><div style='position:relative;'><h2>Your Answer:</h2></div><div style='position:relative'>          <img id='ansImg' alt='Answer' style='width:650px;position:absolute; top:0px; left:0px;z-index:0;' src="+testTasks[sequence-1].url+"><canvas id='budCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.arr)+";  var bcanvas = document.getElementById('budCanvas'); var fcanvas = document.getElementById('flowerCanvas'); var frcanvas = document.getElementById('fruitCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d'); for(key in arr){var xCor = (arr[key].x)*"+scale+"; var yCor = (arr[key].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[key].label; var radius = 10; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();};  }  </script>           </div></div></div></body> <script> document.getElementById('bbtn').addEventListener('click', bFunction); function bFunction() { currentvalue = document.getElementById('bbtn').value; if(currentvalue == 'off'){ document.getElementById('bbtn').value='on'; document.getElementById('bbtn').style.backgroundColor = '#2fd820'; document.getElementById('budCanvas').style.opacity = '1.0';document.getElementById('budSCanvas').style.opacity = '1.0';console.log('pressed 1');}else{ document.getElementById('bbtn').value='off'; document.getElementById('bbtn').style.backgroundColor = 'grey';  console.log('pressed 2'); document.getElementById('budCanvas').style.opacity = '0';document.getElementById('budSCanvas').style.opacity = '0';} }     document.getElementById('fbtn').addEventListener('click', fFunction); function fFunction() { currentvalue = document.getElementById('fbtn').value; if(currentvalue == 'off'){ document.getElementById('fbtn').value='on'; document.getElementById('fbtn').style.backgroundColor = '#009ffc'; document.getElementById('flowerCanvas').style.opacity = '1.0';document.getElementById('flowerSCanvas').style.opacity = '1.0';}else{ document.getElementById('fbtn').value='off'; document.getElementById('fbtn').style.backgroundColor = 'grey';  document.getElementById('flowerCanvas').style.opacity = '0';document.getElementById('flowerSCanvas').style.opacity = '0';} }  document.getElementById('frbtn').addEventListener('click', frFunction); function frFunction() { currentvalue = document.getElementById('frbtn').value; if(currentvalue == 'off'){ document.getElementById('frbtn').value='on'; document.getElementById('frbtn').style.backgroundColor = '#ff63f1'; document.getElementById('fruitCanvas').style.opacity = '1.0';document.getElementById('fruitSCanvas').style.opacity = '1.0';}else{ document.getElementById('frbtn').value='off'; document.getElementById('frbtn').style.backgroundColor = 'grey';  document.getElementById('fruitCanvas').style.opacity = '0';document.getElementById('fruitSCanvas').style.opacity = '0';} }     (function() { var link = document.querySelector('link[rel*=\'icon\']') || document.createElement('link'); link.type = 'image/x-icon'; link.rel = 'icon'; link.href = 'http://mercury.crowdcurio.com/static/img/favicon.png'; document.getElementsByTagName('head')[0].appendChild(link); })();</script>  </html>");
+                    var scale = 650.0/orgimg.width;
+                      newWindow.document.write("<html><head><link rel='icon' href='http://mercury.crowdcurio.com/static/img/favicon.png' /><link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css' integrity='sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u' crossorigin='anonymous'></head><title>Solution</title><body style='background-color:#5b8747'><div style='border-width:2px; border-style:solid;text-align:center;max-width:850px;min-width:700px;height:60px;position:relative;left:20%;top:13px;'><div style='display:table;font-size:30px;position:relative;top:4px;width:100%;height:100%;'> <div style='table-row;' align='center'><div style='display:table-cell;width:20%'> Legends: </div>  <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='bbtn' value='on' style='background-color:#2fd820;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Bud</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='fbtn' value='on' style='background-color:#009ffc;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Flower</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='frbtn' value='on' style='background-color:#ff63f1;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Fruit</Button> </div>    </div></div>       </div><div style='width:1400px;position:relative;text-align:center'><div style='float:left; width:700px;'><div style='position:relative;'><h2>Solution:</h2></div><div style='position:relative'><img id='solImg' alt='Answer' style='width:650px' src="+testTasks[sequence-1].url+" style='width:650px;position:absolute; top:0px; left:15px;z-index:0;'>                                                                                                                                                                                                                                           <canvas id='budSCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerSCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitSCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.sArr)+";  var bcanvas = document.getElementById('budSCanvas'); var fcanvas = document.getElementById('flowerSCanvas'); var frcanvas = document.getElementById('fruitSCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d');                                     var i; for(i=0;i<"+ this.sArr.length +";i+=1){var xCor = (arr[i].x)*"+scale+"; var yCor = (arr[i].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[i].label; var radius = 15; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();}  }  </script>    </div>                                                                                                                                                                                                                                                                                                                                           </div><div style='float:right;width:700px;position:relative;'><div style='position:relative;'><h2>Your Answer:</h2></div><div style='position:relative'>          <img id='ansImg' alt='Answer' style='width:650px;position:absolute; top:0px; left:0px;z-index:0;' src="+testTasks[sequence-1].url+"><canvas id='budCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.arr)+";  var bcanvas = document.getElementById('budCanvas'); var fcanvas = document.getElementById('flowerCanvas'); var frcanvas = document.getElementById('fruitCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d'); for(key in arr){var xCor = (arr[key].x)*"+scale+"; var yCor = (arr[key].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[key].label; var radius = 15; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();};  }  </script>           </div></div></div></body> <script> document.getElementById('bbtn').addEventListener('click', bFunction); function bFunction() { currentvalue = document.getElementById('bbtn').value; if(currentvalue == 'off'){ document.getElementById('bbtn').value='on'; document.getElementById('bbtn').style.backgroundColor = '#2fd820'; document.getElementById('budCanvas').style.opacity = '1.0';document.getElementById('budSCanvas').style.opacity = '1.0';console.log('pressed 1');}else{ document.getElementById('bbtn').value='off'; document.getElementById('bbtn').style.backgroundColor = 'grey';  console.log('pressed 2'); document.getElementById('budCanvas').style.opacity = '0';document.getElementById('budSCanvas').style.opacity = '0';} }     document.getElementById('fbtn').addEventListener('click', fFunction); function fFunction() { currentvalue = document.getElementById('fbtn').value; if(currentvalue == 'off'){ document.getElementById('fbtn').value='on'; document.getElementById('fbtn').style.backgroundColor = '#009ffc'; document.getElementById('flowerCanvas').style.opacity = '1.0';document.getElementById('flowerSCanvas').style.opacity = '1.0';}else{ document.getElementById('fbtn').value='off'; document.getElementById('fbtn').style.backgroundColor = 'grey';  document.getElementById('flowerCanvas').style.opacity = '0';document.getElementById('flowerSCanvas').style.opacity = '0';} }  document.getElementById('frbtn').addEventListener('click', frFunction); function frFunction() { currentvalue = document.getElementById('frbtn').value; if(currentvalue == 'off'){ document.getElementById('frbtn').value='on'; document.getElementById('frbtn').style.backgroundColor = '#ff63f1'; document.getElementById('fruitCanvas').style.opacity = '1.0';document.getElementById('fruitSCanvas').style.opacity = '1.0';}else{ document.getElementById('frbtn').value='off'; document.getElementById('frbtn').style.backgroundColor = 'grey';  document.getElementById('fruitCanvas').style.opacity = '0';document.getElementById('fruitSCanvas').style.opacity = '0';} } </script>  </html>");
                     }
 
                     orgimg.src = testTasks[sequence-1].url;
@@ -4581,32 +4641,17 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                             if (window.experiment === undefined) {
                                 that.modals.loading_modal.modal('close');
                                 that.modals.finished_modal.modal('open');
-//                                if(this.completedTasks>=1){
-//                                    this.client.create('annotation', {
-//                                        label: 'submission',
-//                                        duration: that.timer.getTime(),
-//                                        position: {
-//                                          x: 0,
-//                                          y: 0
-//                                        },
-//                                          dup: false,
-//                                          sequence: 12,
-//                                          setNum: global.setNum,
-//                                      }, (annotation) => {
-//                                        // set the id of the annotation html element
-//                                    });
-//                                }
                       
 
                                 setTimeout(() => {
-                                  incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                  incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                                   window.location.href = '/';
                                 }, 1000);
                             } else {
                               that.modals.loading_modal.modal('close');
                               that.modals.experiment_complete_modal.modal('open');
                               setTimeout(() => {
-                                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
                               }, 1000);
                             }
                           }else{
@@ -4627,6 +4672,16 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                             }
                             that.data = testTasks[that.completedTasks];
                             global.oImg.src = testTasks[that.completedTasks].url;
+                            global.learnmoreLink = task.learnmorelink
+                          if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+                             $('#examples-container-learnmore').css("visibility", "visible");
+                             if (global.learnmoreLink.substr(0, 4) !== 'http'){
+                              global.learnmoreLink = 'http://' + global.learnmoreLink;
+                              }
+                             $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                          }else{
+                             $('#examples-container-learnmore').css("visibility", "hidden");
+                          }
                             $('.subject').attr('src', testTasks[that.completedTasks].url);
                             tCount = 0;
 
@@ -4678,7 +4733,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     var unassignDataTwo = [];
                     var unassignDataThree = [];
                     
-                    this.client.listAll('data', {                                   //fixitfixit unassign the assigned data
+                    this.client.listAll('data', {                                   //unassign the assigned data
                         experiment: window.experiment,
                         testassignedtoone: window.user,
                     }, (images) => {
@@ -4745,7 +4800,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     if(test2Attempts==1){
                         swal({
                             html: 'Sorry, your counts were incorrect. <br><br>Please try again. You have 2 chances remaining.',
-                            imageUrl: 'https://www.segerios.com/wp-content/uploads/2016/10/Hey-you-can-do-it.jpg',
+                            imageUrl: 'https://s3-us-west-2.amazonaws.com/testcurio/Hey-you-can-do-it.jpg',
                             imageWidth: 380.8,
                             imageHeight: 250.4,
                             imageAlt: 'Encouragment kid',
@@ -4759,7 +4814,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                     }else if(test2Attempts==2){
                         swal({
                             html: 'Sorry, your counts were incorrect. <br><br>Please try again. You have 1 chance remaining.',
-                            imageUrl: 'https://www.segerios.com/wp-content/uploads/2016/10/Hey-you-can-do-it.jpg',
+                            imageUrl: 'https://s3-us-west-2.amazonaws.com/testcurio/Hey-you-can-do-it.jpg',
                             imageWidth: 380.8,
                             imageHeight: 250.4,
                             imageAlt: 'Encouragment kid',
@@ -4811,17 +4866,17 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                 orgimg.arr = ms.markers;
                 orgimg.sArr = ad[sequence-1]["coordinates"];
                 orgimg.onload = function(){
-                var scale = 650/orgimg.width;
-                  newWindow.document.write("<html><head><link rel='icon' href='http://mercury.crowdcurio.com/static/img/favicon.png' /><link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css' integrity='sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u' crossorigin='anonymous'></head><title>Solution</title><body style='background-color:#5b8747'><div style='border-width:2px; border-style:solid;text-align:center;max-width:850px;min-width:700px;height:60px;position:relative;left:20%;top:13px;'><div style='display:table;font-size:30px;position:relative;top:4px;width:100%;height:100%;'> <div style='table-row;' align='center'><div style='display:table-cell;width:20%'> Legends: </div>  <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='bbtn' value='on' style='background-color:#2fd820;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Bud</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='fbtn' value='on' style='background-color:#009ffc;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Flower</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='frbtn' value='on' style='background-color:#ff63f1;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Fruit</Button> </div>    </div></div>       </div><div style='width:1400px;position:relative;text-align:center'><div style='float:left; width:700px;'><div style='position:relative;'><h2>Solution:</h2></div><div style='position:relative'><img id='solImg' alt='Answer' style='width:650px' src="+testTasks[sequence-1].url+" style='width:650px;position:absolute; top:0px; left:15px;z-index:0;'>                                                                                                                                                                                                                                           <canvas id='budSCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerSCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitSCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.sArr)+";  var bcanvas = document.getElementById('budSCanvas'); var fcanvas = document.getElementById('flowerSCanvas'); var frcanvas = document.getElementById('fruitSCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d');                                     var i; for(i=0;i<"+ this.sArr.length +";i+=1){var xCor = (arr[i].x)*"+scale+"; var yCor = (arr[i].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[i].label; var radius = 10; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();}  }  </script>    </div>                                                                                                                                                                                                                                                                                                                                           </div><div style='float:right;width:700px;position:relative;'><div style='position:relative;'><h2>Your Answer:</h2></div><div style='position:relative'>          <img id='ansImg' alt='Answer' style='width:650px;position:absolute; top:0px; left:0px;z-index:0;' src="+testTasks[sequence-1].url+"><canvas id='budCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.arr)+";  var bcanvas = document.getElementById('budCanvas'); var fcanvas = document.getElementById('flowerCanvas'); var frcanvas = document.getElementById('fruitCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d'); for(key in arr){var xCor = (arr[key].x)*"+scale+"; var yCor = (arr[key].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[key].label; var radius = 10; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();};  }  </script>           </div></div></div></body> <script> document.getElementById('bbtn').addEventListener('click', bFunction); function bFunction() { currentvalue = document.getElementById('bbtn').value; if(currentvalue == 'off'){ document.getElementById('bbtn').value='on'; document.getElementById('bbtn').style.backgroundColor = '#2fd820'; document.getElementById('budCanvas').style.opacity = '1.0';document.getElementById('budSCanvas').style.opacity = '1.0';console.log('pressed 1');}else{ document.getElementById('bbtn').value='off'; document.getElementById('bbtn').style.backgroundColor = 'grey';  console.log('pressed 2'); document.getElementById('budCanvas').style.opacity = '0';document.getElementById('budSCanvas').style.opacity = '0';} }     document.getElementById('fbtn').addEventListener('click', fFunction); function fFunction() { currentvalue = document.getElementById('fbtn').value; if(currentvalue == 'off'){ document.getElementById('fbtn').value='on'; document.getElementById('fbtn').style.backgroundColor = '#009ffc'; document.getElementById('flowerCanvas').style.opacity = '1.0';document.getElementById('flowerSCanvas').style.opacity = '1.0';}else{ document.getElementById('fbtn').value='off'; document.getElementById('fbtn').style.backgroundColor = 'grey';  document.getElementById('flowerCanvas').style.opacity = '0';document.getElementById('flowerSCanvas').style.opacity = '0';} }  document.getElementById('frbtn').addEventListener('click', frFunction); function frFunction() { currentvalue = document.getElementById('frbtn').value; if(currentvalue == 'off'){ document.getElementById('frbtn').value='on'; document.getElementById('frbtn').style.backgroundColor = '#ff63f1'; document.getElementById('fruitCanvas').style.opacity = '1.0';document.getElementById('fruitSCanvas').style.opacity = '1.0';}else{ document.getElementById('frbtn').value='off'; document.getElementById('frbtn').style.backgroundColor = 'grey';  document.getElementById('fruitCanvas').style.opacity = '0';document.getElementById('fruitSCanvas').style.opacity = '0';} }     (function() { var link = document.querySelector('link[rel*=\'icon\']') || document.createElement('link'); link.type = 'image/x-icon'; link.rel =  'icon'; link.href = 'http://mercury.crowdcurio.com/static/img/favicon.png'; document.getElementsByTagName('head')[0].appendChild(link); })();</script>  </html>");
+                var scale = 650.0/orgimg.width;
+                  newWindow.document.write("<html><head><link rel='icon' href='http://mercury.crowdcurio.com/static/img/favicon.png' /><link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css' integrity='sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u' crossorigin='anonymous'></head><title>Solution</title><body style='background-color:#5b8747'><div style='border-width:2px; border-style:solid;text-align:center;max-width:850px;min-width:700px;height:60px;position:relative;left:20%;top:13px;'><div style='display:table;font-size:30px;position:relative;top:4px;width:100%;height:100%;'> <div style='table-row;' align='center'><div style='display:table-cell;width:20%'> Legends: </div>  <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='bbtn' value='on' style='background-color:#2fd820;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Bud</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='fbtn' value='on' style='background-color:#009ffc;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Flower</Button> </div> <div style='display:table-cell;width:20%'> <Button type='button' class='btn' id='frbtn' value='on' style='background-color:#ff63f1;height:48;width:90;font-size:17px;border-style:solid;boder-width:10px;border-color:#e6e6e6;'>Fruit</Button> </div>    </div></div>       </div><div style='width:1400px;position:relative;text-align:center'><div style='float:left; width:700px;'><div style='position:relative;'><h2>Solution:</h2></div><div style='position:relative'><img id='solImg' alt='Answer' style='width:650px' src="+testTasks[sequence-1].url+" style='width:650px;position:absolute; top:0px; left:15px;z-index:0;'>                                                                                                                                                                                                                                           <canvas id='budSCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerSCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitSCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:25px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.sArr)+";  var bcanvas = document.getElementById('budSCanvas'); var fcanvas = document.getElementById('flowerSCanvas'); var frcanvas = document.getElementById('fruitSCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d');                                     var i; for(i=0;i<"+ this.sArr.length +";i+=1){var xCor = (arr[i].x)*"+scale+"; var yCor = (arr[i].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[i].label; var radius = 15; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();}  }  </script>    </div>                                                                                                                                                                                                                                                                                                                                           </div><div style='float:right;width:700px;position:relative;'><div style='position:relative;'><h2>Your Answer:</h2></div><div style='position:relative'>          <img id='ansImg' alt='Answer' style='width:650px;position:absolute; top:0px; left:0px;z-index:0;' src="+testTasks[sequence-1].url+"><canvas id='budCanvas' width='650' height='1000' style='z-index:20;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas><canvas id='flowerCanvas' width='650' height='1000' style='z-index:30;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas>   <canvas id='fruitCanvas' width='650' height='1000' style='z-index:40;position:absolute; top:0px; left:0px;'> Your browser does not support the canvas element. </canvas> <script>var arr=[]; arr="+JSON.stringify(this.arr)+";  var bcanvas = document.getElementById('budCanvas'); var fcanvas = document.getElementById('flowerCanvas'); var frcanvas = document.getElementById('fruitCanvas'); var bcontext = bcanvas.getContext('2d'); var fcontext = fcanvas.getContext('2d'); var frcontext = frcanvas.getContext('2d'); for(key in arr){var xCor = (arr[key].x)*"+scale+"; var yCor = (arr[key].y)*"+scale+";  console.log('xCor: '+xCor); console.log('yCor: '+yCor);var label = arr[key].label; var radius = 15; bcontext.beginPath();fcontext.beginPath(); frcontext.beginPath(); bcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); fcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); frcontext.arc(xCor, yCor, radius, 0, 2 * Math.PI, false); bcontext.lineWidth = 3.3; fcontext.lineWidth = 3.3; frcontext.lineWidth = 3.3; if(label=='bud'){bcontext.strokeStyle = '#2fd820'; bcontext.stroke();}else if(label=='flower'){fcontext.strokeStyle ='#009ffc'; fcontext.stroke();}else if(label=='fruit'){frcontext.strokeStyle ='#ff63f1';frcontext.stroke();};  }  </script>           </div></div></div></body> <script> document.getElementById('bbtn').addEventListener('click', bFunction); function bFunction() { currentvalue = document.getElementById('bbtn').value; if(currentvalue == 'off'){ document.getElementById('bbtn').value='on'; document.getElementById('bbtn').style.backgroundColor = '#2fd820'; document.getElementById('budCanvas').style.opacity = '1.0';document.getElementById('budSCanvas').style.opacity = '1.0';console.log('pressed 1');}else{ document.getElementById('bbtn').value='off'; document.getElementById('bbtn').style.backgroundColor = 'grey';  console.log('pressed 2'); document.getElementById('budCanvas').style.opacity = '0';document.getElementById('budSCanvas').style.opacity = '0';} }     document.getElementById('fbtn').addEventListener('click', fFunction); function fFunction() { currentvalue = document.getElementById('fbtn').value; if(currentvalue == 'off'){ document.getElementById('fbtn').value='on'; document.getElementById('fbtn').style.backgroundColor = '#009ffc'; document.getElementById('flowerCanvas').style.opacity = '1.0';document.getElementById('flowerSCanvas').style.opacity = '1.0';}else{ document.getElementById('fbtn').value='off'; document.getElementById('fbtn').style.backgroundColor = 'grey';  document.getElementById('flowerCanvas').style.opacity = '0';document.getElementById('flowerSCanvas').style.opacity = '0';} }  document.getElementById('frbtn').addEventListener('click', frFunction); function frFunction() { currentvalue = document.getElementById('frbtn').value; if(currentvalue == 'off'){ document.getElementById('frbtn').value='on'; document.getElementById('frbtn').style.backgroundColor = '#ff63f1'; document.getElementById('fruitCanvas').style.opacity = '1.0';document.getElementById('fruitSCanvas').style.opacity = '1.0';}else{ document.getElementById('frbtn').value='off'; document.getElementById('frbtn').style.backgroundColor = 'grey';  document.getElementById('fruitCanvas').style.opacity = '0';document.getElementById('fruitSCanvas').style.opacity = '0';} } </script>  </html>");
                 }
 
                 orgimg.src = testTasks[sequence-1].url;
                 that.modals.fetching_task_modal.modal('open');
-                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+                incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
             })
           }else{
             that.modals.fetching_task_modal.modal('open');
-            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment);
+            incrementExperimentWorkflowIndex(csrftoken, window.user, window.experiment, window.hitid);
           }
         })
       }
@@ -4848,9 +4903,9 @@ ImageAnnotator.prototype.postInitialize = function (config) {
       //var score = 100 - 100* (      Math.abs(bCount-bSol)/parseFloat(bCount+bSol)*bSol/parseFloat(bSol+fSol+frSol)  + Math.abs(fCount-fSol)/parseFloat(fCount+fSol)*fSol/parseFloat(bSol+fSol+frSol)  + Math.abs(frCount-frSol)/parseFloat(frCount+frSol)*frSol/parseFloat(bSol+fSol+frSol)    )
       var score = 100.0 * (bCor+fCor+frCor)/(bCor+fCor+frCor+bWro+fWro+frWro)
       console.log("score: "+score)
-      var passScore = 80;
-      if(score < passScore){
+      if(score < window.test_passing_score){
         this.client.create('annotation', {
+            hitid: window.hitid,
             label: 'submission',
             position: {
               x: 0,
@@ -4865,6 +4920,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
         });
       }else{
         this.client.create('annotation', {
+            hitid: window.hitid,
             label: 'submission',
             position: {
               x: 0,
@@ -4880,7 +4936,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             console.log('new passtest annotaiton id: '+annotation.id)
         });
       }
-      that.onNextTask(score,passScore,bCount,bSol,fCount,fSol,frCount,frSol, that.completedTasks+1,passTest);
+      that.onNextTask(score, bCount,bSol,fCount,fSol,frCount,frSol, that.completedTasks+1,passTest);
     });
 
     $('#queue-switch-button').click(() => {
@@ -5184,10 +5240,21 @@ ImageAnnotator.prototype.attachHandlers = function () {
       $(`#${e.currentTarget.id}`).siblings().removeClass('success');
       $(`#${e.currentTarget.id}`).addClass('success');
       document.getElementById('examples-container-default').innerHTML = '';
+      document.getElementById('examples-container-learnmore').innerHTML = '';
+      $('#examples-container-learnmore').css("visibility", "hidden");
       $('.example-container').hide();
       $(`#example-container-${e.currentTarget.id.split('-')[0]}`).show();
     }else{
       document.getElementById('examples-container-default').innerHTML = 'Click one of the labels to begin counting an object and see related examples.';
+      if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+       $('#examples-container-learnmore').css("visibility", "visible");
+       if (global.learnmoreLink.substr(0, 4) !== 'http'){
+        global.learnmoreLink = 'http://' + global.learnmoreLink;
+       }
+       $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+      }else{
+       $('#examples-container-learnmore').css("visibility", "hidden");
+      }
       $(`#${e.currentTarget.id}`).removeClass('success');
       $('.example-container').hide();
     }
@@ -5232,8 +5299,8 @@ ImageAnnotator.prototype.render = function (config) {
   const nextWindowTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; min-height: 100px;"> <div id="controls">  <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr/> </div> <button id="next-button" class="waves-light btn submit"> <i class="fa fa-arrow-right" aria-hidden="true"></i> </button> <button id="exit-button" class="waves-light btn submit" style="background:#EA2C2C; width:100%;top:3px;position:relative;visibility:hidden;display:none;"> <i class="fa fa-sign-out-alt" aria-hidden="true"></i> </button></div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextWindowWithQuestionsTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><hr> <div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span style="color: white;">Alongside your annotations, please answer the following question(s):</span></div></div><div class="row"><div class="col s12" style="text-align: center;"><span class="next-button-supporting-question">1. How well do you think you did on this task?</span><div class="row confidence-textarea-container"><textarea id="confidenceTextArea" placeholder="State how well you think you did here."></textarea></div></div></div><button id="next-button" class="waves-light btn submit"> SUBMIT </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextWindowBotTemplate = '<div id="submission_toggles" class="submission side_buttons fullscreen" style="float: left; min-height: 100px;"> <div id="controls"> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner" class="fullscreen"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><button id="next-button-disabled" class="waves-light btn" disabled="disabled" style="font-size: 0.9em;width: 100%;">Talk to Rae to Submit</button>  </div> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
-
-  let counting_template = '<div class="row"><div align="center">{LABEL_SPACE}</div><div id="examples-container-default" class="center ">Click one of the labels to begin counting an object and see related examples.</div>{EXAMPLES_SPACE}</div><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"><div id="focus_toggles_inner"><div id="task-focus-text"><span>Focus On: </span><span id="task-focus-text-main"><i>No Focus</i></span></div></div></div></div>';
+    
+    let counting_template = '<div class="row"><div align="center">{LABEL_SPACE}</div><div id="examples-container-default" class="center ">Click one of the labels to begin counting an object and see related examples.</div><div id="examples-container-learnmore" class="center"><br><br><br><br><br><a href="//mercury.crowdcurio.com" target="_blank"><h6><u>Learn More</u></h6></a></div>{EXAMPLES_SPACE}</div><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"><div id="focus_toggles_inner"><div id="task-focus-text"><span>Focus On: </span><span id="task-focus-text-main"><i>No Focus</i></span></div></div></div></div>';;
   
   const taskCounterTemplate = '<div id="task-counter"><div id="task-counter-task-number">Loading Progress</div></div>';
   let rightActionPanel = '<div id="right-action-panel"></div><div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;"> {LABEL_SPACE} </div> </div>';
@@ -5308,10 +5375,7 @@ ImageAnnotator.prototype.render = function (config) {
      //build the counting UI based on the config
      //1. build the label container
     let labels = '<div id="task-options-header" class="center black-text">Count the following:</div><hr><div class="joint-toggle">';
-    task.genre = 'n.a.'
-    console.log(task.genre)
-    console.log(config.labels);
-    console.log(config.labels['n.a'])
+    //task.genre = 'n.a.'
     genres = ['bud', 'flower', 'fruit']
     for (var i = 0; i < genres.length; i++) {
       labels += `<label id="${genres[i]}-btn" class="task-option-toggle toggle-btn" lval="marker-n${i + 1}"><input type="radio" name="${i + 1}" value="${genres[i]}"/>${genres[i]}<div id="${genres[i]}-count" class="task-option-count" marker="n${i + 1}" >0</div></label><i id="${genres[i]}-estimate" class="white-text estimate-button fa fa-pencil-square-o fa-1" style="display: ${estimate_display};color:black;float: right;padding-top: 12px;cursor: pointer;"></i><br>`;
@@ -5882,6 +5946,7 @@ ImageAnnotator.prototype.addTool = function (event) {
 
       // create the annotation in the system
       this.client.create('annotation', {
+        hitid: window.hitid,
         label: surface.markers[surface.selection].label,
         position: {
           x: surface.markers[surface.selection].x,
@@ -6007,8 +6072,9 @@ ImageAnnotator.prototype.addTool = function (event) {
 
       // create the annotation
       if(!window.assessment){
-            if(dejavu && this.completedTasks==dupIndex2){//for Dejavu, record the duplicated two images
+            if(window.dejavu=='True' && this.completedTasks==dupIndex2){//for Dejavu, record the duplicated two images
               this.client.create('annotation', {
+                hitid: window.hitid,
                 label: surface.markers[surface.selection].label,
                 position: {
                   x: surface.markers[surface.selection].x,
@@ -6023,6 +6089,7 @@ ImageAnnotator.prototype.addTool = function (event) {
               });
             }else{
               this.client.create('annotation', {
+                hitid: window.hitid,
                 label: surface.markers[surface.selection].label,
                 position: {
                   x: surface.markers[surface.selection].x,
@@ -6069,6 +6136,7 @@ ImageAnnotator.prototype.deleteTool = function (e) {
     // delete the annotation in the system
     if(!window.assessment){
       that.client.delete('annotation', {
+        hitid: window.hitid,
         id: annotation_id,
       }, (annotation) => {
         print(`Annotation (${annotation_id}) deleted successfully.`);
@@ -6087,6 +6155,7 @@ ImageAnnotator.prototype.deleteTool = function (e) {
 
       // delete the annotation in the system
       that.client.delete('annotation', {
+        hitid: window.hitid,
         id: annotation_id,
       }, (annotation) => {
         print(`Annotation (${annotation_id}) deleted successfully.`);
@@ -6119,6 +6188,7 @@ ImageAnnotator.prototype.deleteToolWithButton = function (ele) {
 
   // delete the annotation in the system
   this.client.delete('annotation', {
+    hitid: window.hitid,
     id: annotation_id,
   }, (annotation) => {
     // print("Annotation ("+annotation_id+") deleted successfully.");
@@ -6195,6 +6265,7 @@ ImageAnnotator.prototype.setToolValue = function (event) {
     const annotation_id = $(id).attr('annotation-id');
     if (annotation_id) {
       that.client.update('annotation', {
+        hitid: window.hitid,
         id: annotation_id,
         label: character,
       }, (annotation) => {
@@ -6327,6 +6398,7 @@ ImageAnnotator.prototype.dropTool = function (event) {
   const annotation_id = $(`#m-${event.target.id.split('-')[1]}`).attr('annotation-id');
   // delete the annotation in the system
   this.client.update('annotation', {
+    hitid: window.hitid,
     id: annotation_id,
     position: {
       x: x.toPrecision(3) / zoom,
@@ -6683,11 +6755,11 @@ ImageAnnotator.prototype.zoom_in = function (event) {
      markers[i].style.height = '25px';
      markers[i].style.width = '25px';
      if(zoom <= 0.5){
-       markers[i].style.top = (parseFloat(markers[i].style.top.substr(0,markers[i].style.top.length-2)) + 2.8 * scaler).toString()+'px';
-       markers[i].style.left = (parseFloat(markers[i].style.left.substr(0,markers[i].style.left.length-2)) + 2.8 * scaler).toString()+'px';
+       markers[i].style.top = (parseFloat(markers[i].style.top.substr(0,markers[i].style.top.length-2)) + 2.805 * scaler).toString()+'px';
+       markers[i].style.left = (parseFloat(markers[i].style.left.substr(0,markers[i].style.left.length-2)) + 2.805 * scaler).toString()+'px';
      }else{
-       markers[i].style.top = (parseFloat(markers[i].style.top.substr(0,markers[i].style.top.length-2)) + 1.95 * scaler).toString()+'px';
-       markers[i].style.left = (parseFloat(markers[i].style.left.substr(0,markers[i].style.left.length-2)) + 1.95 * scaler).toString()+'px';
+       markers[i].style.top = (parseFloat(markers[i].style.top.substr(0,markers[i].style.top.length-2)) + 1.951 * scaler).toString()+'px';
+       markers[i].style.left = (parseFloat(markers[i].style.left.substr(0,markers[i].style.left.length-2)) + 1.951 * scaler).toString()+'px';
 
      }
   }
@@ -8114,6 +8186,17 @@ ImageAnnotator.prototype.switchTaskQueues = function (queueName) {
     that.client.setData(task.id);
     that.data = task;
     global.oImg.src = task.url;
+    global.learnmoreLink = task.learnmorelink
+
+    if(global.learnmoreLink!='' && global.learnmoreLink!=null){
+      $('#examples-container-learnmore').css("visibility", "visible");
+      if (global.learnmoreLink.substr(0, 4) !== 'http'){
+            global.learnmoreLink = 'http://' + global.learnmoreLink;
+      }
+      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+    }else{
+      $('#examples-container-learnmore').css("visibility", "hidden");
+    }
     $('.subject').attr('src', task.url);
 
     if (that.collaboration) {
@@ -8513,8 +8596,6 @@ const config = window.config || {
 
 // set whether dejavu is implemented and whether the duplicated images can be side by side
 // Note: if there are only 1 image in the queue, that image will be duplicated and sideBySideAllowed always behaves as it is true.
-global.dejavu = true;
-global.sideBySideAllowed = false
 
 //store the indexes of the duplicate images in the queue. dupIndex1 < dupIndex2
 global.dupIndex1 = 0;
@@ -8532,6 +8613,8 @@ global.fdej2 = 0;
 global.frdej1 = 0;
 global.frdej2 = 0;
 
+global.learnmoreLink = "";
+
 function start(configuration) {
   /* create and init the annotator ui */
   ms = new ImageAnnotator();
@@ -8542,8 +8625,6 @@ function start(configuration) {
 start(config);
 
 delete global.assessmentData
-
-
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./components/image-annotator":2,"./utils/timer":8,"jquery":17}],5:[function(require,module,exports){
@@ -8658,16 +8739,16 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
         if(params['experiment'] !== undefined && params['experiment'] > 0){
             that.experiment = {id: params['experiment'], type: 'Experiment'}
             that.condition = {id: params['condition'], type: 'Condition'}
-            if(dejavu){
+            if(window.dejavu=='True'){
                 that.router.init(that.client, {
-                    'page_size': 12-1,//each queue of tasks contains 9 unique images where one of them is duplicated for Dejavu
+                    'page_size': window.image_num_per_set-1,//each queue of tasks contains 9 unique images where one of them is duplicated for Dejavu
                     'task': params['task'],
                     'experiment': params['experiment'],
                     'condition': params['condition'],
                  });
             }else{
                 that.router.init(that.client, {
-                    'page_size': 12,
+                    'page_size': window.image_num_per_set,
                     'task': params['task'],
                     'experiment': params['experiment'],
                     'condition': params['condition'],
@@ -8675,14 +8756,14 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
             }
         } else {
             that.experiment = null;
-            if(dejavu){
+            if(window.dejavu=='True'){
                 that.router.init(that.client, {
-                    'page_size': 12-1,//same as above
+                    'page_size': window.image_num_per_set-1,//same as above
                     'task': params['task'],
                  });
             }else{
                 that.router.init(that.client, {
-                    'page_size': 12,
+                    'page_size': window.image_num_per_set,
                     'task': params['task'],
                  });
             }
@@ -9958,11 +10039,10 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
         function bestCopyEver(src) {
            return Object.assign({}, src);
         }
-
-        if(dejavu){
+        if(window.dejavu=='True'){
             try{
                 //that.queues[params['type']]['total'] = response.count;
-                that.queues[params['type']]['total'] = 12-1;
+                that.queues[params['type']]['total'] = window.image_num_per_set-1;
                 console.log("Dejavu is implemented.");
                 var dup_index = getRandomInt( that.queues[params['type']]['queue'].length );
                 var dupImg = bestCopyEver(that.queues[params['type']]['queue'][dup_index]);
