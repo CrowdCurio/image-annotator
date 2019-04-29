@@ -10057,7 +10057,7 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
                         dupIndex1 = min;
                         dupIndex2 = max;
 
-                        if(sideBySideAllowed == 'False' or sideBySideAllowed == 'false' ){
+                        if(sideBySideAllowed == 'False'){
                             while(dupIndex1+1 == dupIndex2 && that.queues[params['type']]['queue'].length>2 ){
                                 shuffle(that.queues[params['type']]['queue']);//reshuffle if two duplicated images are side by side
                                 min = Math.min(dupIndex1,dupIndex2);
