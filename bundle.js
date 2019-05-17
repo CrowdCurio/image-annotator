@@ -2994,7 +2994,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             if (global.learnmoreLink.substr(0, 4) !== 'http'){
                 global.learnmoreLink = 'http://' + global.learnmoreLink;
             }
-            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
         }else{
             $('#examples-container-learnmore').css("visibility", "hidden");
         }
@@ -3016,7 +3016,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
           if (global.learnmoreLink.substr(0, 4) !== 'http'){
             global.learnmoreLink = 'http://' + global.learnmoreLink;
           }
-          $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+          $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
         }else{
           $('#examples-container-learnmore').css("visibility", "hidden");
         }
@@ -3265,7 +3265,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                   if (global.learnmoreLink.substr(0, 4) !== 'http'){
                                     global.learnmoreLink = 'http://' + global.learnmoreLink;
                                   }
-                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
                                 }else{
                                   $('#examples-container-learnmore').css("visibility", "hidden");
                                 }
@@ -3589,7 +3589,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                                   if (global.learnmoreLink.substr(0, 4) !== 'http'){
                                     global.learnmoreLink = 'http://' + global.learnmoreLink;
                                   }
-                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                                  $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
                                 }else{
                                   $('#examples-container-learnmore').css("visibility", "hidden");
                                 }
@@ -3928,7 +3928,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                               if (global.learnmoreLink.substr(0, 4) !== 'http'){
                                 global.learnmoreLink = 'http://' + global.learnmoreLink;
                               }
-                              $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                              $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
                             }else{
                               $('#examples-container-learnmore').css("visibility", "hidden");
                             }
@@ -4190,7 +4190,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                       if (global.learnmoreLink.substr(0, 4) !== 'http'){
                         global.learnmoreLink = 'http://' + global.learnmoreLink;
                       }
-                      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
                     }else{
                       $('#examples-container-learnmore').css("visibility", "hidden");
                     }
@@ -4548,7 +4548,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             if (global.learnmoreLink.substr(0, 4) !== 'http'){
                 global.learnmoreLink = 'http://' + global.learnmoreLink;
             }
-            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+            $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
         }else{
             $('#examples-container-learnmore').css("visibility", "hidden");
         }
@@ -4678,7 +4678,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
                              if (global.learnmoreLink.substr(0, 4) !== 'http'){
                               global.learnmoreLink = 'http://' + global.learnmoreLink;
                               }
-                             $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+                             $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
                           }else{
                              $('#examples-container-learnmore').css("visibility", "hidden");
                           }
@@ -5251,7 +5251,7 @@ ImageAnnotator.prototype.attachHandlers = function () {
        if (global.learnmoreLink.substr(0, 4) !== 'http'){
         global.learnmoreLink = 'http://' + global.learnmoreLink;
        }
-       $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+       $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
       }else{
        $('#examples-container-learnmore').css("visibility", "hidden");
       }
@@ -5300,7 +5300,7 @@ ImageAnnotator.prototype.render = function (config) {
   const nextWindowWithQuestionsTemplate = '<div id="submission_toggles" class="submission side_buttons" style="float: left; width: 250px; min-height: 100px;"> <div id="controls"> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><hr> <div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span style="color: white;">Alongside your annotations, please answer the following question(s):</span></div></div><div class="row"><div class="col s12" style="text-align: center;"><span class="next-button-supporting-question">1. How well do you think you did on this task?</span><div class="row confidence-textarea-container"><textarea id="confidenceTextArea" placeholder="State how well you think you did here."></textarea></div></div></div><button id="next-button" class="waves-light btn submit"> SUBMIT </button> </div> <div class="view-divider" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
   const nextWindowBotTemplate = '<div id="submission_toggles" class="submission side_buttons fullscreen" style="float: left; min-height: 100px;"> <div id="controls"> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> <div id="submission_toggles_inner" class="fullscreen"> <div class="toggle-text"> Next Task <hr> </div><div class="row"><div class="next-button-supporting-question" style="text-align: center;font-size: 0.85em;"><span>You\'re finished with the task when you\'ve counted all of the objects in the image.</span></div></div><button id="next-button-disabled" class="waves-light btn" disabled="disabled" style="font-size: 0.9em;width: 100%;">Talk to Rae to Submit</button>  </div> <div class="view-divider fullscreen" style="border-top: 1px solid black; border-bottom: initial;height: 4px;width: 100%;"></div> </div> </div>';
     
-    let counting_template = '<div class="row"><div align="center">{LABEL_SPACE}</div><div id="examples-container-default" class="center ">Click one of the labels to begin counting an object and see related examples.</div><div id="examples-container-learnmore" class="center"><br><br><br><br><br><a href="//mercury.crowdcurio.com" target="_blank"><h6><u>Learn More</u></h6></a></div>{EXAMPLES_SPACE}</div><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"><div id="focus_toggles_inner"><div id="task-focus-text"><span>Focus On: </span><span id="task-focus-text-main"><i>No Focus</i></span></div></div></div></div>';;
+    let counting_template = '<div class="row"><div align="center">{LABEL_SPACE}</div><div id="examples-container-default" class="center ">Click one of the labels to begin counting an object and see related examples.</div><div id="examples-container-learnmore" class="center"><br><br><br><br><br><a href="//mercury.crowdcurio.com" target="_blank"><font size=\"4\"><u>Learn more about this species</u></font></a></div>{EXAMPLES_SPACE}</div><div id="focus_toggles" class="submission side_buttons" style="display:none;"> <div id="controls"><div id="focus_toggles_inner"><div id="task-focus-text"><span>Focus On: </span><span id="task-focus-text-main"><i>No Focus</i></span></div></div></div></div>';;
   
   const taskCounterTemplate = '<div id="task-counter"><div id="task-counter-task-number">Loading Progress</div></div>';
   let rightActionPanel = '<div id="right-action-panel"></div><div id="bottom-controls"> <div id="bottom-control-keypad" style="float: left;display: inline-block;"> {LABEL_SPACE} </div> </div>';
@@ -8193,7 +8193,7 @@ ImageAnnotator.prototype.switchTaskQueues = function (queueName) {
       if (global.learnmoreLink.substr(0, 4) !== 'http'){
             global.learnmoreLink = 'http://' + global.learnmoreLink;
       }
-      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><h6><u>Learn More</u></h6></a>")
+      $("#examples-container-learnmore").html("<br><br><br><br><br><a href="+global.learnmoreLink+" target=\"_blank\"><font size=\"4\"><u>Learn more about this species</u></font></a>")
     }else{
       $('#examples-container-learnmore').css("visibility", "hidden");
     }
