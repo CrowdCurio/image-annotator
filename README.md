@@ -1,5 +1,5 @@
 # CrowdCurio Image Annotator Library
-The CrowdCurio Image Annotation Library implements counting (classification) and transcription tasks for images. 
+The CrowdCurio Image Annotation Library implements counting (classification) and transcription tasks for images.
 
 ![An screenshot of the Image Annotator.](https://curio-media.s3.amazonaws.com/github-media/image-annotator.png)
 
@@ -20,7 +20,7 @@ We use Browserify and Uglify in our build processes. Both tools can be installed
 >npm install -g uglify-js
 
 To build the script bundle *without* minification, run:
->browserify lib/main.s -o bundle.js
+>browserify lib/main.js -o bundle.js
 
 To build *with* minification, run:
 >browserify lib/main.js | uglifyjs bundle.js
