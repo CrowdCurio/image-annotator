@@ -1750,7 +1750,7 @@ ImageAnnotator.prototype.postInitialize = function (config) {
             /* get the first item in the queue and it's class label */
             swal({
                         title:'Welcome to the tests. Good luck!',
-                        html: "<br>To start the actual task, you need to pass one of the two tests with an " +window.dejavu_passing_score.toString()+ " or higher accuracy . <br><br>You have 1 chance for the first test and 3 chances for the second test. <br><br>If you fail the first test, the solution will be provided; please examine it carefully.",
+                        html: "<br>To start the actual task, you need to pass one of the two tests with an " +window.test_passing_score.toString()+ "% or higher accuracy . <br><br>You have 1 chance for the first test and 3 chances for the second test. <br><br>If you fail the first test, the solution will be provided; please examine it carefully.",
                             confirmButtonColor: '#39ce63',
                           confirmButtonText: 'Got it',
                           allowEscapeKey: false,
@@ -5709,10 +5709,10 @@ ImageMiniMap.prototype.resize_map = function (animate, factor) {
   surface.map.updateMapLocation();
   const main_interface = $('#main-interface');
   if (main_interface.hasClass('fullscreen')) {//checks whether fullscreen mode is currently on
-    var w = screen.width;
+    var w = screen.width; 
     var h = screen.height;
     var DPR = window.devicePixelRatio;
-    w = Math.round(DPR * w);
+    w = Math.round(DPR * w); 
     h = Math.round(DPR * h);
     factor = $('#map #thumb').width() / $('.subject').width();
     const location_width = screen.width * factor;
@@ -6094,7 +6094,7 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
                     'condition': params['condition']
                  });
             }
-
+            
 
         } else {
             that.experiment = null;
@@ -6109,7 +6109,7 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
                     'task': params['task']
                  });
             }
-
+            
         }
 
         // if collaboration is active, create and initialize a task session and wait to resolve the promise until the task session has been initialized
@@ -6117,7 +6117,7 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
         // client.task_session.connect() before using TaskSession features
         if(params['configuration']['collaboration']){
             if(params['configuration']['collaboration']['active']){
-
+                
                 if(params['configuration']['collaboration']['automatic']) {
                     that.task_session = new TaskSession();
                     that.task_session.init(jQuery.extend({'client': that.client}, params)).then(function(){
@@ -6125,9 +6125,9 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
                         that.task_session.connect(that.task_session.task_session);
                         resolve();
                     });
-
+                    
                 } else {
-
+               
                     that.task_session = new TaskSession();
                     that.task_session.init(jQuery.extend({'client': that.client}, params)).then(function(){
 
@@ -6141,17 +6141,17 @@ CrowdCurioClient.prototype.init = function(params, delay_connect){
                         resolve();
 
                     });
-
+                    
                     that.help_request = new HelpRequest();
                     that.help_request.init(jQuery.extend({"client":that, 'apiClient': that.client, 'task_session': that.task_session}, params));
                     console.log("FML");
                 }
-
+                
             }
         } else {
             resolve();
         }
-
+        
     }.bind(this));
 }
 
@@ -6344,10 +6344,10 @@ function print(message){
 }
 
 function xhttpPOSTRequest(path, message) {
-
-    var xhttp;
+    
+    var xhttp;    
     xhttp=new XMLHttpRequest();
-
+    
     //console.log(xhttp);
     //console.log(getCookie(csrftoken));
     xhttp.open("POST", path, false);
@@ -6437,7 +6437,7 @@ HelpRequest.prototype.createHelpRequest = function(params) {
     var that = this;
 
     var random = Math.floor(Math.random()*1000000);
-
+    
     // make the task session
     var channel_name = "t" + that.task.id + "e" + that.experiment.id + "u" + that.user.id + "r" + random;
     that.task_session.create(channel_name).then((message) => {
@@ -6470,7 +6470,7 @@ HelpRequest.prototype.createHelpRequest = function(params) {
         console.log(message);
 
     });
-
+    
 }
 
 /**
@@ -6538,7 +6538,7 @@ HelpRequest.prototype.CreateHelpRequestOnReply = function(helpRequest) {
 
 /**
  * Lists the HelpRequests related to the task/experiment
- *
+ * 
  * @param: task
  * @param: experiment
  * @param: condition
@@ -6592,14 +6592,14 @@ HelpRequest.prototype.listOnReply = function(helpRequest){
 
 /**
  * Joins a current help Request
- *
+ * 
  * NOTE: make sure to set tasK_channel.channel_name
- *
+ * 
  * @param: help_request: object
  * @param: task_session: id
  * @param: channel_name: channel name
  * @param: help_request: {id:int}
- *
+ * 
  */
 HelpRequest.prototype.joinHelpRequest = function(helpRequest, task_session, channel_name, help_request_data) {
     var that = this;
@@ -6751,14 +6751,14 @@ HelpRequest.prototype.leaveHelpRequest = function(callback) {
     }));
     console.log("cookies:" + document.cookie);
     console.log("csrf:" + getCookie("csrftoken"));
-
+    
     xhttpRequest('/onDemandHelp/' + that.help_request.id + "/leave/", null);
-
+    
 }
 
 /**
  * Sets up all the required internal variables in a help request object
- *
+ * 
  * @param: user
  * @param: task
  * @param: experiment
@@ -6766,8 +6766,8 @@ HelpRequest.prototype.leaveHelpRequest = function(callback) {
  */
 HelpRequest.prototype.init = function(params, callback) {
     var that = this;
-
-
+    
+    
     // append to CSS
 
     var style=document.createElement('style');
@@ -6782,7 +6782,7 @@ HelpRequest.prototype.init = function(params, callback) {
     // Set up VARS
     that.apiClient = params['apiClient'];
     that.client = params["client"];
-
+    
     // get Task, Experiment, Condition info.
 
     // set (1) task and (2) experiment vars
@@ -6798,12 +6798,12 @@ HelpRequest.prototype.init = function(params, callback) {
     } else {
         that.condition = null;
     }
-
+    
     // make a taskSession
     that.task_session = params['task_session'];
     /*
     that.task_session = new TaskSession();
-
+    
     that.task_session.init(params).then(function(){
         resolve();
     });
@@ -6837,7 +6837,7 @@ HelpRequest.prototype.init = function(params, callback) {
 
 HelpRequest.prototype.buildCore = function(element) {
     var that = this;
-
+    
     var hr_container = $('<div>')
         .attr('id', "help-request")
         .attr("class", "help-request-main")
@@ -6856,7 +6856,7 @@ HelpRequest.prototype.buildCore = function(element) {
     request_container_js.style.display = "none";
     request_container_js.style.overflow = "auto";
     request_container_js.style.height = "200px";
-
+    
         // Create container that holds buttons
     var button_container = $('<div>')
         .attr('id', "help-request-button-container")
@@ -6866,7 +6866,7 @@ HelpRequest.prototype.buildCore = function(element) {
 
     // Create button for making new requests
     console.log("Creating form button");
-
+    
     var create_new_button = $("<i>")
         .attr("id", "help-request-create")
         .attr("class", "fa fa-sticky-note-o help-request-button")
@@ -6876,21 +6876,21 @@ HelpRequest.prototype.buildCore = function(element) {
         .attr("class", "fa fa-refresh help-request-refresh-button")
         .attr("id", "help-request-refresh-button")
         .appendTo(button_container);
-
-
+    
+        
     // Create the create form
     console.log("Creating form for help request creation");
-
+    
     var create_container = $('<div>')
         .attr('id', "help-request-create-container")
         .attr('class', "help-request-create-container")
         .appendTo(hr_container);
     document.getElementById('help-request-create-container').style.display = "none";
-
+    
     $("<a>")
         .text("Question")
         .appendTo(create_container);
-
+    
     var nameForm = $("<input>")
         .attr("type", "text")
         .attr("id", "help-request-name")
@@ -6900,7 +6900,7 @@ HelpRequest.prototype.buildCore = function(element) {
         .attr("id", "help-request-return-button")
         .attr("class", "fa fa-mail-reply")
         .appendTo(create_container);
-
+        
     var submitCreate = $("<i>")
         .attr("id", "help-request-submit")
         .attr("class", "fa fa-sticky-note-o")
@@ -6934,23 +6934,23 @@ HelpRequest.prototype.buildCore = function(element) {
         }
     });
     */
-
+    
     // Hides the list, and shows the create form
     create_new_button.click(function(){
         tab('help-request-create-container');
     });
-
+   
     // Submit creation
     submitCreate.click(function() {
         createAndJoinHR(that);
     });
-
+    
     // Return to the original list
     returnButton.click(function() {
         tab('help-request-container');
     });
-
-
+    
+    
     // Refreshes the list
     refresh_button.click(function() {
         $("#help-request-container").text("");
@@ -6975,32 +6975,32 @@ HelpRequest.prototype.buildCore = function(element) {
 HelpRequest.prototype.build = function() {
 
     var that = this
-
+    
     // Make containers
     var main = $("main");
-
+    
     that.buildCore(main);
-
+    
     console.log("building containers");
-
+    
     var hr_container = $("#help-request");
-
+    
     // Make the header
     var help_request_header = $("<div>")
         .attr("id", "help-request-header")
         .attr("class", "help-request-header")
         .appendTo(hr_container);
-
+    
     var hide_button = $("<div>")
         .text("Help Requests")
         .attr("class", "help-request-hide-button")
         .appendTo(help_request_header);
-
-
-
+    
+        
+    
     // Setup Hide Button
     console.log("Setting up hide button");
-
+    
     hide_button.click(function() {
         var request_container = $("#help-request-container");
         // if request_container is displayed, or create_container is displayed, hide all
@@ -7035,8 +7035,8 @@ HelpRequest.prototype.build = function() {
             }
         }
     });
-
-
+    
+    
 }
 
 /**
@@ -7047,35 +7047,35 @@ HelpRequest.prototype.build = function() {
  * @param helpRequest The helpRequest object
  */
 function fillList(data, table, helpRequest) {
-
+    
     console.log(data);
-
+    
     for (i in data) {
-
+        
         var request = data[i];
-
+        
         var id = request.id;
         var channel_name = request.channel_name;
-
+        
         var temp_div = $("<div>")
             .attr("id", "help-request-item")
             .attr("class", "help-request-item")
             .appendTo(table);
-
+        
         // TODO: put them in their own temp_div
-
+        
         var name = $("<div>")
             .attr("id", "help-request-item-name")
             .attr("class", "help-request-item-name")
             .text(request.name)
             .appendTo(temp_div);
-
+            
         var summary = $("<div>")
             .attr("id", "help-request-item-summary")
             .attr("class", "help-request-item-summary")
             .text(request.summary)
             .appendTo(temp_div);
-
+            
         // We need to generate a new function for each click.
         temp_div.click(specificHRJoin(helpRequest, request.id, request.task_session, channel_name, request.owner));
     }
@@ -7106,7 +7106,7 @@ function specificHRJoin(helpRequest, help_request_id, task_session_id, channel_n
 function createAndJoinHR(helpRequest) {
 
     console.log("Creating new Help Request");
-
+   
     // create help request
     var content = {
         name: $("#help-request-name").val(),
@@ -7117,7 +7117,7 @@ function createAndJoinHR(helpRequest) {
 
     // update ui
     tab("help-request-resolve-container");
-
+    
     // Clean the list so that we don't have to worry about accuracy
     $("#help-request-container").text("");
     helpRequest.page_number = 1;
@@ -7150,7 +7150,7 @@ function HelpRequest(){
 
 var CSS = `
 div.help-request-main{
-
+    
     z-index: 999;
     height: 45px;
     width: 300px;
@@ -7173,7 +7173,7 @@ div.help-request-main{
 .help-request-item:hover {
     background-color: grey;
 }
-
+    
 
 .help-request-header{
 
@@ -7229,11 +7229,11 @@ div.help-request-main{
     border-right-color: rgb(38, 50, 56);
     border-right-style: solid;
     border-right-width: 2px;
-
+    
     font-size: 14px;
     font-weight: 400;
     font-family: "Roboto", sans-serif;
-
+    
 }
 .help-request-button-container {
     background-color: white;
@@ -7243,14 +7243,14 @@ div.help-request-main{
     border-right-color: rgb(38, 50, 56);
     border-right-style: solid;
     border-right-width: 2px;
-
+    
     padding-top: 5px;
     padding-left: 10%;
     padding-right: 10%;
-
+    
     font-size: 14px;
     font-weight: 400;
-    font-family: "Roboto", sans-serif;
+    font-family: "Roboto", sans-serif; 
 }
 
 .help-request-create-container {
@@ -7261,14 +7261,14 @@ div.help-request-main{
     border-right-color: rgb(38, 50, 56);
     border-right-style: solid;
     border-right-width: 2px;
-
+    
     padding-top: 5px;
     padding-left: 10%;
     padding-right: 10%;
-
+    
     font-size: 14px;
     font-weight: 400;
-    font-family: "Roboto", sans-serif;
+    font-family: "Roboto", sans-serif; 
 }
 
 .help-request-close-container {
@@ -7322,7 +7322,7 @@ TaskRoutingManager.prototype.init = function(client, params) {
         }
 
     */
-
+    
     this.client = client;
     this.queues = {};
     this.params = params;
@@ -7333,11 +7333,11 @@ TaskRoutingManager.prototype.init = function(client, params) {
 TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback) {
    // add the queue type
     params['type'] = queue_type;
-
+    
     var that = this;
     let action = ["route", "list"]
     return this.client.action(schema, action, params).then(function(response){
-
+        
         // store the total number of tasks remaining
         that.queues[params['type']]['total'] = response.count;
 
@@ -7380,9 +7380,9 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
             that.queues[params['type']]['total'] = response.count;
             console.log("Dejavu is implemented.");
             var dup_index = getRandomInt( that.queues[params['type']]['queue'].length );
-            var dupImg = bestCopyEver(that.queues[params['type']]['queue'][dup_index]);
+            var dupImg = bestCopyEver(that.queues[params['type']]['queue'][dup_index]); 
             that.queues[params['type']]['queue'].push( dupImg );
-
+            
             dupIndex1 = dup_index;
             dupIndex2 = that.queues[params['type']]['queue'].length-1;
             shuffle(that.queues[params['type']]['queue']);
@@ -7391,7 +7391,7 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
             var min = Math.min(dupIndex1,dupIndex2);
             var max = Math.max(dupIndex1,dupIndex2);
             dupIndex1 = min;
-            dupIndex2 = max;
+            dupIndex2 = max; 
 
             if(sideBySideAllowed == false){
                 console.log("Boolean sideBySideAllowed is false.")
@@ -7400,7 +7400,7 @@ TaskRoutingManager.prototype.fetchTasks = function(queue_type, params, callback)
                     min = Math.min(dupIndex1,dupIndex2);
                     max = Math.max(dupIndex1,dupIndex2);
                     dupIndex1 = min;
-                    dupIndex2 = max;
+                    dupIndex2 = max;  
                 }
             }
         }
@@ -7424,7 +7424,7 @@ TaskRoutingManager.prototype.getNextTask = function(queue_type, callback){
     }
 };
 
-// - - - - - - Simulation / Testing Helpers - - - - -
+// - - - - - - Simulation / Testing Helpers - - - - - 
 TaskRoutingManager.prototype.simulateFetchTasks = function(){
     console.log('Simulating a fetch of new tasks ... Fetched!');
 
@@ -8080,7 +8080,7 @@ TaskSession.prototype.connect = function(roomId){
 
 /**
  * Sends an interface event to the websocket.
- * @param {*} msg
+ * @param {*} msg 
  */
 TaskSession.prototype.send = function(event){
     var that = this;
@@ -8093,8 +8093,8 @@ TaskSession.prototype.send = function(event){
 
 /**
  * A general-purpose function for listing data from the server.
- * @param {*} model
- * @param {*} callback
+ * @param {*} model 
+ * @param {*} callback 
  */
 TaskSession.prototype.fetch = function(model, params, callback){
     let action = ["message", "list"];
@@ -8105,8 +8105,8 @@ TaskSession.prototype.fetch = function(model, params, callback){
 
 /**
  * A general-purpose function for loading state from the server.
- * @param {*} model
- * @param {*} callback
+ * @param {*} model 
+ * @param {*} callback 
  */
 TaskSession.prototype.loadState = function(callback){
     var that = this;
@@ -57074,8 +57074,8 @@ var Showdown = new (require("./vendor/showdown/src/showdown.js").Showdown.conver
  *   format: {"tag1":"attrib1|attrib2|attrib3", "tag2":...}
  *   wildcard for all tags: "*"
  * - forceProtocol (Boolean): Force src and href to http:// if they miss a protocol.
- *
- * Converts a markdown text into a HTML
+ * 
+ * Converts a markdown text into a HTML 
  **/
 this.Markdown = function(text, stripUnwanted, allowedTags, allowedAttributes, forceProtocol){
     var md =  Showdown.makeHtml(text);
@@ -57093,11 +57093,11 @@ this.Markdown = function(text, stripUnwanted, allowedTags, allowedAttributes, fo
  *   format: {"tag1":"attrib1|attrib2|attrib3", "tag2":...}
  *   wildcard for all tags: "*"
  * - forceProtocol (Boolean): Force src and href to http:// if they miss a protocol.
- *
+ * 
  * Removes unwanted tags and attributes from HTML string
  **/
 var stripUnwantedHTML = function(html /*, allowedTags, allowedAttributes, forceProtocol */){
-    var allowedTags = arguments[1] ||
+    var allowedTags = arguments[1] || 
             'a|b|blockquote|code|del|dd|dl|dt|em|h1|h2|h3|'+
             'i|img|li|ol|p|pre|sup|sub|strong|strike|ul|br|hr',
         allowedAttributes = arguments[2] || {
@@ -57105,11 +57105,11 @@ var stripUnwantedHTML = function(html /*, allowedTags, allowedAttributes, forceP
             'a':   'href',
             '*':   'title'
         }, forceProtocol = arguments[3] || false,
-
+        
         testAllowed = new RegExp('^('+allowedTags.toLowerCase()+')$'),
         findTags = /<(\/?)\s*([\w:\-]+)([^>]*)>/g,
         findAttribs = /(\s*)([\w:-]+)\s*=\s*(?:(?:(["'])([^\3]+?)(?:\3))|([^\s]+))/g;
-
+    
     // convert all strings patterns into regexp objects (if not already converted)
     for(var i in allowedAttributes){
         if(allowedAttributes.hasOwnProperty(i) && typeof allowedAttributes[i] === 'string'){
@@ -57117,39 +57117,39 @@ var stripUnwantedHTML = function(html /*, allowedTags, allowedAttributes, forceP
                 allowedAttributes[i].toLowerCase()+')$');
         }
     }
-
+    
     // find and match html tags
     return html.replace(findTags, function(original, lslash, tag, params){
-        var tagAttr, wildcardAttr,
+        var tagAttr, wildcardAttr, 
             rslash = params.substr(-1)=="/" && "/" || "";
 
         tag = tag.toLowerCase();
-
+        
         // tag is not allowed, return empty string
         if(!tag.match(testAllowed))
             return "";
-
+        
         // tag is allowed
         else{
             // regexp objects for a particular tag
             tagAttr = tag in allowedAttributes && allowedAttributes[tag];
             wildcardAttr = "*" in allowedAttributes && allowedAttributes["*"];
-
+            
             // if no attribs are allowed
             if(!tagAttr && !wildcardAttr)
                 return "<"+lslash+tag+rslash+">";
-
+            
             // remove trailing slash if any
             params = params.trim();
             if(rslash){
                 params = params.substr(0, params.length-1);
             }
-
+            
             // find and remove unwanted attributes
             params = params.replace(findAttribs, function(original, space,
                                                             name, quot, value){
                 name = name.toLowerCase();
-
+                
                 if (!value && !quot) {
                   value = "";
                   quot = '"';
@@ -57157,21 +57157,21 @@ var stripUnwantedHTML = function(html /*, allowedTags, allowedAttributes, forceP
                   value = quot;
                   quot = '"';
                 }
-
+                
                 // force data: and javascript: links and images to #
                 if((name=="href" || name=="src") &&
                    (value.trim().substr(0, "javascript:".length)=="javascript:"
                     || value.trim().substr(0, "data:".length)=="data:")) {
                     value = "#";
                 }
-
+                
                 // scope links and sources to http protocol
                 if (forceProtocol &&
                      (name=="href" || name=="src") &&
                      !/^[a-zA-Z]{3,5}:\/\//.test(value)) {
                   value = "http://" + value;
                 }
-
+                
                 if((wildcardAttr && name.match(wildcardAttr)) ||
                         (tagAttr && name.match(tagAttr))){
                     return space+name+"="+quot+value+quot;
@@ -57181,7 +57181,7 @@ var stripUnwantedHTML = function(html /*, allowedTags, allowedAttributes, forceP
 
             return "<"+lslash+tag+(params?" "+params:"")+rslash+">";
         }
-
+            
     });
 }
 
@@ -57382,7 +57382,7 @@ var _StripLinkDefinitions = function(text) {
 			} else if (m4) {
 				g_titles[m1] = m4.replace(/"/g,"&quot;");
 			}
-
+			
 			// Completely remove the definition from the text
 			return "";
 		}
@@ -57455,7 +57455,7 @@ var _HashHTMLBlocks = function(text) {
 	text = text.replace(/^(<(p|div|h[1-6]|blockquote|pre|table|dl|ol|ul|script|noscript|form|fieldset|iframe|math)\b[^\r]*?.*<\/\2>[ \t]*(?=\n+)\n)/gm,hashElement);
 
 	// Special case just for <hr />. It was easier to make a special case than
-	// to make the other regex more complicated.
+	// to make the other regex more complicated.  
 
 	/*
 		text = text.replace(/
@@ -57464,7 +57464,7 @@ var _HashHTMLBlocks = function(text) {
 			[ ]{0,3}
 			(<(hr)				// start tag = $2
 			\b					// word break
-			([^<>])*?			//
+			([^<>])*?			// 
 			\/?>)				// the matching end tag
 			[ \t]*
 			(?=\n{2,})			// followed by a blank line
@@ -57522,13 +57522,13 @@ var hashElement = function(wholeMatch,m1) {
 	// Undo double lines
 	blockText = blockText.replace(/\n\n/g,"\n");
 	blockText = blockText.replace(/^\n/,"");
-
+	
 	// strip trailing blank lines
 	blockText = blockText.replace(/\n+$/g,"");
-
+	
 	// Replace the element text with a marker ("~KxK" where x is its key)
 	blockText = "\n\n~K" + (g_html_blocks.push(blockText)-1) + "K\n\n";
-
+	
 	return blockText;
 };
 
@@ -57594,7 +57594,7 @@ var _EscapeSpecialCharsWithinTagAttributes = function(text) {
 // don't conflict with their use in Markdown for code, italics and strong.
 //
 
-	// Build a regex to find HTML tags and comments.  See Friedl's
+	// Build a regex to find HTML tags and comments.  See Friedl's 
 	// "Mastering Regular Expressions", 2nd Ed., pp. 200-201.
 	var regex = /(<[a-z\/!$]("[^"]*"|'[^']*'|[^'">])*>|<!(--.*?--\s*)+>)/gi;
 
@@ -57699,14 +57699,14 @@ var writeAnchorTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 	var link_id	 = m3.toLowerCase();
 	var url		= m4;
 	var title	= m7;
-
+	
 	if (url == "") {
 		if (link_id == "") {
 			// lower-case and turn embedded newlines into spaces
 			link_id = link_text.toLowerCase().replace(/ ?\n/g," ");
 		}
 		url = "#"+link_id;
-
+		
 		if (g_urls[link_id] != undefined) {
 			url = g_urls[link_id];
 			if (g_titles[link_id] != undefined) {
@@ -57721,19 +57721,19 @@ var writeAnchorTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 				return whole_match;
 			}
 		}
-	}
-
+	}	
+	
 	url = escapeCharacters(url,"*_");
 	var result = "<a href=\"" + url + "\"";
-
+	
 	if (title != "") {
 		title = title.replace(/"/g,"&quot;");
 		title = escapeCharacters(title,"*_");
 		result +=  " title=\"" + title + "\"";
 	}
-
+	
 	result += ">" + link_text + "</a>";
-
+	
 	return result;
 }
 
@@ -57804,14 +57804,14 @@ var writeImageTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 	var title	= m7;
 
 	if (!title) title = "";
-
+	
 	if (url == "") {
 		if (link_id == "") {
 			// lower-case and turn embedded newlines into spaces
 			link_id = alt_text.toLowerCase().replace(/ ?\n/g," ");
 		}
 		url = "#"+link_id;
-
+		
 		if (g_urls[link_id] != undefined) {
 			url = g_urls[link_id];
 			if (g_titles[link_id] != undefined) {
@@ -57821,8 +57821,8 @@ var writeImageTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 		else {
 			return whole_match;
 		}
-	}
-
+	}	
+	
 	alt_text = alt_text.replace(/"/g,"&quot;");
 	url = escapeCharacters(url,"*_");
 	var result = "<img src=\"" + url + "\" alt=\"" + alt_text + "\"";
@@ -57835,9 +57835,9 @@ var writeImageTag = function(wholeMatch,m1,m2,m3,m4,m5,m6,m7) {
 		title = escapeCharacters(title,"*_");
 		result +=  " title=\"" + title + "\"";
 	//}
-
+	
 	result += " />";
-
+	
 	return result;
 }
 
@@ -57847,7 +57847,7 @@ var _DoHeaders = function(text) {
 	// Setext-style headers:
 	//	Header 1
 	//	========
-	//
+	//  
 	//	Header 2
 	//	--------
 	//
@@ -57931,7 +57931,7 @@ var _DoLists = function(text) {
 			// paragraph for the last item in a list, if necessary:
 			list = list.replace(/\n{2,}/g,"\n\n\n");;
 			var result = _ProcessListItems(list);
-
+	
 			// Trim any trailing whitespace, to put the closing `</$list_type>`
 			// up on the preceding line, to get it past the current stupid
 			// HTML block parser. This is a hack to work around the terrible
@@ -57951,7 +57951,7 @@ var _DoLists = function(text) {
 			// paragraph for the last item in a list, if necessary:
 			var list = list.replace(/\n{2,}/g,"\n\n\n");;
 			var result = _ProcessListItems(list);
-			result = runup + "<"+list_type+">\n" + result + "</"+list_type+">\n";
+			result = runup + "<"+list_type+">\n" + result + "</"+list_type+">\n";	
 			return result;
 		});
 	}
@@ -58037,7 +58037,7 @@ _ProcessListItems = function(list_str) {
 var _DoCodeBlocks = function(text) {
 //
 //  Process Markdown `<pre><code>` blocks.
-//
+//  
 
 	/*
 		text = text.replace(text,
@@ -58054,12 +58054,12 @@ var _DoCodeBlocks = function(text) {
 
 	// attacklab: sentinel workarounds for lack of \A and \Z, safari\khtml bug
 	text += "~0";
-
+	
 	text = text.replace(/(?:\n\n|^)((?:(?:[ ]{4}|\t).*\n+)+)(\n*[ ]{0,3}[^ \t\n]|(?=~0))/g,
 		function(wholeMatch,m1,m2) {
 			var codeblock = m1;
 			var nextChar = m2;
-
+		
 			codeblock = _EncodeCode( _Outdent(codeblock));
 			codeblock = _Detab(codeblock);
 			codeblock = codeblock.replace(/^\n+/g,""); // trim leading newlines
@@ -58086,26 +58086,26 @@ var hashBlock = function(text) {
 var _DoCodeSpans = function(text) {
 //
 //   *  Backtick quotes are used for <code></code> spans.
-//
+// 
 //   *  You can use multiple backticks as the delimiters if you want to
 //	 include literal backticks in the code span. So, this input:
-//
+//	 
 //		 Just type ``foo `bar` baz`` at the prompt.
-//
+//	 
 //	   Will translate to:
-//
+//	 
 //		 <p>Just type <code>foo `bar` baz</code> at the prompt.</p>
-//
+//	 
 //	There's no arbitrary limit to the number of backticks you
 //	can use as delimters. If you need three consecutive backticks
 //	in your code, use four for delimiters, etc.
 //
 //  *  You can use spaces to get literal backticks at the edges:
-//
+//	 
 //		 ... type `` `bar` `` ...
-//
+//	 
 //	   Turns to:
-//
+//	 
 //		 ... type <code>`bar`</code> ...
 //
 
@@ -58208,7 +58208,7 @@ var _DoBlockQuotes = function(text) {
 
 			bq = bq.replace(/^[ \t]+$/gm,"");		// trim whitespace-only lines
 			bq = _RunBlockGamut(bq);				// recurse
-
+			
 			bq = bq.replace(/(^|\n)/g,"$1  ");
 			// These leading spaces screw with <pre> content, so we need to fix that:
 			bq = bq.replace(
@@ -58220,7 +58220,7 @@ var _DoBlockQuotes = function(text) {
 					pre = pre.replace(/~0/g,"");
 					return pre;
 				});
-
+			
 			return hashBlock("<blockquote>\n" + bq + "\n</blockquote>");
 		});
 	return text;
@@ -58279,14 +58279,14 @@ var _FormParagraphs = function(text) {
 
 var _EncodeAmpsAndAngles = function(text) {
 // Smart processing for ampersands and angle brackets that need to be encoded.
-
+	
 	// Ampersand-encoding based entirely on Nat Irons's Amputator MT plugin:
 	//   http://bumppo.net/projects/amputator/
 	text = text.replace(/&(?!#?[xX]?(?:[0-9a-fA-F]+|\w+);)/g,"&amp;");
-
+	
 	// Encode naked <'s
 	text = text.replace(/<(?![a-z\/?\$!])/gi,"&lt;");
-
+	
 	return text;
 }
 
