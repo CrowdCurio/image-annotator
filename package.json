@@ -30,7 +30,7 @@
     "intro.js": "^2.8.0-alpha.1",
     "jquery": "^3.6.0",
     "jquery-migrate": "^3.0.1",
-    "jquery-ui": "^1.12.1",
+    "jquery-ui": "^1.13.2",
     "jquery-ui-browserify": "^1.11.0-pre-seelio",
     "materialize-css": "^0.100.2",
     "rangeslider.js": "^2.3.1",
